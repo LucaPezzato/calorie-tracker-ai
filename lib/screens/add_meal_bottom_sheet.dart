@@ -16,13 +16,17 @@ import 'barcode_scanner_dialog.dart';
 class AddMealBottomSheet extends StatefulWidget {
   final String selectedDate;
   final UserProfile profile;
+  final MealEntry? existingMeal;
   final void Function(MealEntry entry) onSaveMeal;
+  final VoidCallback? onDeleteMeal;
 
   const AddMealBottomSheet({
     super.key,
     required this.selectedDate,
     required this.profile,
+    this.existingMeal,
     required this.onSaveMeal,
+    this.onDeleteMeal,
   });
 
   @override
@@ -37,13 +41,11 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
 
   int _selectedMode = 0; // 0: AI Testo, 1: Foto, 2: Barcode, 3: Dispensa
   late String _loggedAtTime;
-  final TextEditingController _promptCtrl = TextEditingController(
-    text: 'Trancio di salmone al forno con patate e olio',
-  );
+  late final TextEditingController _promptCtrl;
   final TextEditingController _refineCtrl = TextEditingController();
 
   late String _mealId;
-  String _mealTitle = 'Salmone al forno con patate';
+  late String _mealTitle;
   String? _localPhotoPath;
   Uint8List? _selectedImageBytes;
   bool _isAnalyzing = false;
@@ -52,44 +54,57 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
   @override
   void initState() {
     super.initState();
-    final now = TimeOfDay.now();
-    _loggedAtTime =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    _mealId = _uuid.v4();
-
-    _items = [
-      MealItem(
-        id: _uuid.v4(),
-        mealId: _mealId,
-        name: 'Trancio di salmone',
-        grams: 180,
-        kcalPer100g: 205,
-        proteinPer100g: 20.5,
-        carbsPer100g: 0,
-        fatPer100g: 12.2,
-      ),
-      MealItem(
-        id: _uuid.v4(),
-        mealId: _mealId,
-        name: 'Patate al forno',
-        grams: 160,
-        kcalPer100g: 93,
-        proteinPer100g: 2.5,
-        carbsPer100g: 21.0,
-        fatPer100g: 0.1,
-        fiberPer100g: 2.2,
-      ),
-      MealItem(
-        id: _uuid.v4(),
-        mealId: _mealId,
-        name: 'Olio EVO (cottura)',
-        grams: 10,
-        kcalPer100g: 884,
-        proteinPer100g: 0,
-        carbsPer100g: 0,
-        fatPer100g: 100,
-      ),
-    ];
+    final existing = widget.existingMeal;
+    if (existing != null) {
+      _mealId = existing.id;
+      _mealTitle = existing.title;
+      _loggedAtTime = existing.loggedAt;
+      _localPhotoPath = existing.localPhotoPath;
+      _items = List<MealItem>.from(existing.items);
+      _promptCtrl = TextEditingController(text: existing.title);
+    } else {
+      final now = TimeOfDay.now();
+      _loggedAtTime =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      _mealId = _uuid.v4();
+      _mealTitle = 'Salmone al forno con patate';
+      _promptCtrl = TextEditingController(
+        text: 'Trancio di salmone al forno con patate e olio',
+      );
+      _items = [
+        MealItem(
+          id: _uuid.v4(),
+          mealId: _mealId,
+          name: 'Trancio di salmone',
+          grams: 180,
+          kcalPer100g: 205,
+          proteinPer100g: 20.5,
+          carbsPer100g: 0,
+          fatPer100g: 12.2,
+        ),
+        MealItem(
+          id: _uuid.v4(),
+          mealId: _mealId,
+          name: 'Patate al forno',
+          grams: 160,
+          kcalPer100g: 93,
+          proteinPer100g: 2.5,
+          carbsPer100g: 21.0,
+          fatPer100g: 0.1,
+          fiberPer100g: 2.2,
+        ),
+        MealItem(
+          id: _uuid.v4(),
+          mealId: _mealId,
+          name: 'Olio EVO (cottura)',
+          grams: 10,
+          kcalPer100g: 884,
+          proteinPer100g: 0,
+          carbsPer100g: 0,
+          fatPer100g: 100,
+        ),
+      ];
+    }
   }
 
   @override
@@ -248,31 +263,58 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
           controller: scrollController,
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
           children: [
-            // Header + Time Picker Pill
+            // Header + Time Picker Pill + Delete Meal Option
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Aggiungi Pasto', style: tt.headlineSmall),
-                ActionChip(
-                  avatar: Icon(
-                    Symbols.schedule_rounded,
-                    size: 16,
-                    color: cs.primary,
+                Flexible(
+                  child: Text(
+                    widget.existingMeal != null
+                        ? 'Modifica Pasto'
+                        : 'Aggiungi Pasto',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.headlineSmall,
                   ),
-                  label: Text(_loggedAtTime, style: tt.labelMedium),
-                  shape: const StadiumBorder(),
-                  onPressed: () async {
-                    final picked = await showTimePicker(
-                      context: context,
-                      initialTime: TimeOfDay.now(),
-                    );
-                    if (picked != null) {
-                      setState(() {
-                        _loggedAtTime =
-                            '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-                      });
-                    }
-                  },
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.existingMeal != null &&
+                        widget.onDeleteMeal != null)
+                      IconButton(
+                        icon: Icon(
+                          Symbols.delete_outline_rounded,
+                          color: cs.error,
+                        ),
+                        tooltip: 'Elimina intero pasto',
+                        onPressed: () {
+                          widget.onDeleteMeal!();
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                    ActionChip(
+                      avatar: Icon(
+                        Symbols.schedule_rounded,
+                        size: 16,
+                        color: cs.primary,
+                      ),
+                      label: Text(_loggedAtTime, style: tt.labelMedium),
+                      shape: const StadiumBorder(),
+                      onPressed: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.now(),
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            _loggedAtTime =
+                                '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+                          });
+                        }
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -405,6 +447,26 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
                                 ),
                               ),
                             ),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 30,
+                                minHeight: 30,
+                              ),
+                              icon: Icon(
+                                Symbols.delete_outline_rounded,
+                                size: 19,
+                                color: cs.error,
+                              ),
+                              tooltip: 'Rimuovi ingrediente',
+                              onPressed: () {
+                                setState(() {
+                                  _items.removeAt(index);
+                                });
+                              },
+                            ),
                           ],
                         ),
                         Slider(
@@ -480,9 +542,23 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
             FilledButton.icon(
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(54),
+                backgroundColor: _items.isEmpty && widget.existingMeal != null
+                    ? cs.error
+                    : null,
+                foregroundColor: _items.isEmpty && widget.existingMeal != null
+                    ? cs.onError
+                    : null,
                 shape: const StadiumBorder(),
               ),
               onPressed: () {
+                if (_items.isEmpty) {
+                  if (widget.existingMeal != null &&
+                      widget.onDeleteMeal != null) {
+                    widget.onDeleteMeal!();
+                  }
+                  Navigator.of(context).pop();
+                  return;
+                }
                 final entry = MealEntry(
                   id: _mealId,
                   date: widget.selectedDate,
@@ -494,8 +570,16 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
                 widget.onSaveMeal(entry);
                 Navigator.of(context).pop();
               },
-              icon: const Icon(Symbols.check_rounded),
-              label: Text('Salva nella Timeline ($_loggedAtTime)'),
+              icon: Icon(
+                _items.isEmpty && widget.existingMeal != null
+                    ? Symbols.delete_rounded
+                    : Symbols.check_rounded,
+              ),
+              label: Text(
+                _items.isEmpty && widget.existingMeal != null
+                    ? 'Elimina Pasto'
+                    : 'Salva nella Timeline ($_loggedAtTime)',
+              ),
             ),
           ],
         );

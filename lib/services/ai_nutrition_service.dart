@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 import '../models/nutrition_models.dart';
+import 'secure_keys_service.dart';
 
 class AiMealAnalysisResult {
   final String mealTitle;
@@ -164,23 +164,87 @@ Non aggiungere markdown o testo fuori dal JSON.
     required String prompt,
     Uint8List? imageBytes,
   }) async {
-    final model = GenerativeModel(
-      model: modelName,
-      apiKey: apiKey,
-      systemInstruction: Content.system(_systemPrompt),
-      generationConfig: GenerationConfig(
-        responseMimeType: 'application/json',
-        temperature: 0.2,
-      ),
-    );
+    final cleanKey = SecureKeysService.sanitizeKey(apiKey);
+    final candidateModels = <String>{
+      modelName,
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-flash-latest',
+      'gemini-1.5-flash',
+    }.toList();
 
-    final parts = <Part>[TextPart(prompt)];
+    final parts = <Map<String, dynamic>>[
+      {'text': '$_systemPrompt\n\nRichiesta utente:\n$prompt'},
+    ];
     if (imageBytes != null) {
-      parts.add(DataPart('image/jpeg', imageBytes));
+      parts.add({
+        'inlineData': {
+          'mimeType': 'image/jpeg',
+          'data': base64Encode(imageBytes),
+        },
+      });
     }
 
-    final response = await model.generateContent([Content.multi(parts)]);
-    return response.text ?? '{}';
+    String lastError = 'Nessuna risposta da Gemini';
+    for (final candidate in candidateModels) {
+      final uri = Uri.parse(
+        'https://generativelanguage.googleapis.com/v1beta/models/$candidate:generateContent?key=$cleanKey',
+      );
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'contents': [
+            {'role': 'user', 'parts': parts},
+          ],
+          'generationConfig': {
+            'temperature': 0.2,
+            'responseMimeType': 'application/json',
+          },
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        final candidates = decoded['candidates'] as List<dynamic>? ?? [];
+        if (candidates.isEmpty) {
+          throw Exception('Gemini non ha restituito candidati validi.');
+        }
+        final content =
+            (candidates.first as Map<String, dynamic>)['content']
+                as Map<String, dynamic>? ??
+            {};
+        final respParts = content['parts'] as List<dynamic>? ?? [];
+        // Filter out Gemini 2.5 thinking parts ("thought": true) and join text parts
+        final buffer = StringBuffer();
+        for (final p in respParts) {
+          if (p is Map<String, dynamic> && p['thought'] != true) {
+            final t = p['text'];
+            if (t is String) buffer.write(t);
+          }
+        }
+        final text = buffer.toString().trim();
+        if (text.isNotEmpty) return text;
+      } else {
+        // Parse Google API error message if present
+        try {
+          final errMap = jsonDecode(response.body) as Map<String, dynamic>;
+          final errObj = errMap['error'] as Map<String, dynamic>?;
+          lastError =
+              errObj?['message']?.toString() ??
+              'HTTP ${response.statusCode}';
+        } catch (_) {
+          lastError = 'HTTP ${response.statusCode}: ${response.body}';
+        }
+        // If API key itself is invalid (400 API_KEY_INVALID or 403), stop retrying models
+        if (lastError.toLowerCase().contains('api key not valid') ||
+            lastError.toLowerCase().contains('api_key_invalid')) {
+          throw Exception('API Key Gemini non valida: controlla la chiave.');
+        }
+      }
+    }
+
+    throw Exception('Gemini: $lastError');
   }
 
   Future<String> _callOpenAi({
@@ -189,6 +253,7 @@ Non aggiungere markdown o testo fuori dal JSON.
     required String prompt,
     Uint8List? imageBytes,
   }) async {
+    final cleanKey = SecureKeysService.sanitizeKey(apiKey);
     final userContent = <Map<String, dynamic>>[
       {'type': 'text', 'text': prompt},
     ];
@@ -203,7 +268,7 @@ Non aggiungere markdown o testo fuori dal JSON.
     final response = await http.post(
       Uri.parse('https://api.openai.com/v1/chat/completions'),
       headers: {
-        'Authorization': 'Bearer $apiKey',
+        'Authorization': 'Bearer $cleanKey',
         'Content-Type': 'application/json',
       },
       body: jsonEncode({
@@ -218,7 +283,9 @@ Non aggiungere markdown o testo fuori dal JSON.
     );
 
     if (response.statusCode != 200) {
-      throw Exception('Errore OpenAI (${response.statusCode}): ${response.body}');
+      throw Exception(
+        'Errore OpenAI (${response.statusCode}): ${response.body}',
+      );
     }
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final choices = decoded['choices'] as List<dynamic>;
@@ -230,10 +297,14 @@ Non aggiungere markdown o testo fuori dal JSON.
     required String mealId,
     required MealItemSource source,
   }) {
-    final cleaned = rawJson
+    String cleaned = rawJson
         .replaceAll('```json', '')
         .replaceAll('```', '')
         .trim();
+    final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(cleaned);
+    if (jsonMatch != null) {
+      cleaned = jsonMatch.group(0)!;
+    }
     final map = jsonDecode(cleaned) as Map<String, dynamic>;
     final rawItems = (map['items'] as List<dynamic>? ?? []);
 

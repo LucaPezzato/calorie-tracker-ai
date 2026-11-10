@@ -119,6 +119,157 @@ class LocalDatabase {
 
     // Insert default profile row
     await db.insert('user_profile', {'id': 1});
+
+    // Seed initial pantry foods (can be deleted anytime by user)
+    final initialFoods = [
+      const FavoriteFood(
+        id: 'f1',
+        name: 'Yogurt Greco Fage Total 0%',
+        defaultGrams: 170,
+        kcalPer100g: 54,
+        proteinPer100g: 10.3,
+        carbsPer100g: 3.0,
+        fatPer100g: 0,
+        barcode: '5201054017415',
+        useCount: 38,
+      ),
+      const FavoriteFood(
+        id: 'f2',
+        name: 'Pasta Integrale Rummo',
+        defaultGrams: 100,
+        kcalPer100g: 351,
+        proteinPer100g: 14.5,
+        carbsPer100g: 66.0,
+        fatPer100g: 2.0,
+        fiberPer100g: 6.0,
+        barcode: '8008343200553',
+        useCount: 24,
+      ),
+      const FavoriteFood(
+        id: 'f3',
+        name: 'Petto di Pollo (Crudo)',
+        defaultGrams: 200,
+        kcalPer100g: 110,
+        proteinPer100g: 23.0,
+        carbsPer100g: 0,
+        fatPer100g: 1.6,
+        useCount: 21,
+      ),
+      const FavoriteFood(
+        id: 'f4',
+        name: 'Olio Extravergine d\'Oliva (1 cucchiaio)',
+        defaultGrams: 10,
+        kcalPer100g: 884,
+        proteinPer100g: 0,
+        carbsPer100g: 0,
+        fatPer100g: 100.0,
+        useCount: 45,
+      ),
+    ];
+
+    for (final f in initialFoods) {
+      await db.insert('favorite_foods', {
+        'id': f.id,
+        'name': f.name,
+        'default_grams': f.defaultGrams,
+        'kcal_per_100g': f.kcalPer100g,
+        'protein_per_100g': f.proteinPer100g,
+        'carbs_per_100g': f.carbsPer100g,
+        'fat_per_100g': f.fatPer100g,
+        'fiber_per_100g': f.fiberPer100g,
+        'barcode': f.barcode,
+        'use_count': f.useCount,
+      });
+    }
+
+    // Seed initial demo meals & metrics for today on first install (can be deleted anytime)
+    final today = DateTime.now().toIso8601String().split('T').first;
+    await db.insert('daily_metrics', {
+      'date': today,
+      'water_ml': 1500,
+      'weight_kg': 74.2,
+      'updated_at': DateTime.now().toIso8601String(),
+    });
+
+    final demoMeals = [
+      MealEntry(
+        id: 'm1',
+        date: today,
+        loggedAt: '08:30',
+        title: 'Yogurt greco, avena e miele',
+        items: const [
+          MealItem(
+            id: 'i1',
+            mealId: 'm1',
+            name: 'Yogurt greco 0%',
+            grams: 170,
+            kcalPer100g: 54,
+            proteinPer100g: 10.3,
+            carbsPer100g: 3.0,
+            fatPer100g: 0,
+          ),
+          MealItem(
+            id: 'i2',
+            mealId: 'm1',
+            name: 'Fiocchi d\'avena',
+            grams: 40,
+            kcalPer100g: 375,
+            proteinPer100g: 13.5,
+            carbsPer100g: 60.0,
+            fatPer100g: 7.0,
+            fiberPer100g: 10.0,
+          ),
+        ],
+      ),
+      MealEntry(
+        id: 'm2',
+        date: today,
+        loggedAt: '13:15',
+        title: 'Pasta integrale al tonno',
+        items: const [
+          MealItem(
+            id: 'i3',
+            mealId: 'm2',
+            name: 'Pasta integrale',
+            grams: 100,
+            kcalPer100g: 351,
+            proteinPer100g: 14.5,
+            carbsPer100g: 66.0,
+            fatPer100g: 2.0,
+            fiberPer100g: 6.5,
+          ),
+          MealItem(
+            id: 'i4',
+            mealId: 'm2',
+            name: 'Tonno al naturale',
+            grams: 120,
+            kcalPer100g: 108,
+            proteinPer100g: 24.0,
+            carbsPer100g: 0,
+            fatPer100g: 1.0,
+          ),
+        ],
+      ),
+    ];
+
+    for (final entry in demoMeals) {
+      await db.insert('meal_entries', {
+        'id': entry.id,
+        'date': entry.date,
+        'logged_at': entry.loggedAt,
+        'title': entry.title,
+        'notes': entry.notes,
+        'local_photo_path': entry.localPhotoPath,
+        'total_kcal': entry.totalKcal,
+        'total_protein_g': entry.totalProteinG,
+        'total_carbs_g': entry.totalCarbsG,
+        'total_fat_g': entry.totalFatG,
+        'total_fiber_g': entry.totalFiberG,
+      });
+      for (final item in entry.items) {
+        await db.insert('meal_items', item.toMap());
+      }
+    }
   }
 
   /// Fetch chronological timeline meals for a specific date (YYYY-MM-DD)
@@ -187,6 +338,61 @@ class LocalDatabase {
       }
     });
 
+    onDataMutated?.call();
+  }
+
+  /// Delete a meal entry (and its items via ON DELETE CASCADE) from SQLite
+  Future<void> deleteMealEntry(String mealId) async {
+    final db = await database;
+    await db.delete('meal_entries', where: 'id = ?', whereArgs: [mealId]);
+    onDataMutated?.call();
+  }
+
+  Future<List<FavoriteFood>> getFavoriteFoods() async {
+    final db = await database;
+    final rows = await db.query('favorite_foods', orderBy: 'use_count DESC');
+    return rows
+        .map(
+          (r) => FavoriteFood(
+            id: r['id'] as String,
+            name: r['name'] as String,
+            defaultGrams: (r['default_grams'] as num).toDouble(),
+            kcalPer100g: (r['kcal_per_100g'] as num).toDouble(),
+            proteinPer100g: (r['protein_per_100g'] as num).toDouble(),
+            carbsPer100g: (r['carbs_per_100g'] as num).toDouble(),
+            fatPer100g: (r['fat_per_100g'] as num).toDouble(),
+            fiberPer100g: (r['fiber_per_100g'] as num?)?.toDouble() ?? 0.0,
+            barcode: r['barcode'] as String?,
+            useCount: (r['use_count'] as int?) ?? 1,
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> saveFavoriteFood(FavoriteFood food) async {
+    final db = await database;
+    await db.insert(
+      'favorite_foods',
+      {
+        'id': food.id,
+        'name': food.name,
+        'default_grams': food.defaultGrams,
+        'kcal_per_100g': food.kcalPer100g,
+        'protein_per_100g': food.proteinPer100g,
+        'carbs_per_100g': food.carbsPer100g,
+        'fat_per_100g': food.fatPer100g,
+        'fiber_per_100g': food.fiberPer100g,
+        'barcode': food.barcode,
+        'use_count': food.useCount,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    onDataMutated?.call();
+  }
+
+  Future<void> deleteFavoriteFood(String id) async {
+    final db = await database;
+    await db.delete('favorite_foods', where: 'id = ?', whereArgs: [id]);
     onDataMutated?.call();
   }
 

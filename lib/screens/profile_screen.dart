@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../models/nutrition_models.dart';
 import '../services/ai_nutrition_service.dart';
@@ -279,38 +280,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _openApiKeyDialog() async {
-    final ctrl = TextEditingController();
+    final existing = await _keysService.getApiKey(_provider);
+    if (!mounted) return;
+    final ctrl = TextEditingController(text: existing ?? '');
+    bool obscure = true;
     final provName = _provider == AiProviderType.gemini
         ? 'Google Gemini'
         : 'OpenAI';
     await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Configura API Key $provName'),
-        content: TextField(
-          controller: ctrl,
-          obscureText: true,
-          decoration: InputDecoration(
-            hintText: _provider == AiProviderType.gemini
-                ? 'AIzaSy...'
-                : 'sk-proj-...',
-            helperText: 'Salvata cifrata in Android Keystore',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('Configura API Key $provName'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: ctrl,
+                obscureText: obscure,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(
+                  hintText: _provider == AiProviderType.gemini
+                      ? 'AIzaSy...'
+                      : 'sk-proj-...',
+                  helperText: 'Salvata cifrata sul dispositivo',
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          obscure
+                              ? Symbols.visibility_rounded
+                              : Symbols.visibility_off_rounded,
+                        ),
+                        tooltip: 'Mostra/Nascondi',
+                        onPressed: () =>
+                            setDialogState(() => obscure = !obscure),
+                      ),
+                      IconButton(
+                        icon: const Icon(Symbols.content_paste_rounded),
+                        tooltip: 'Incolla dagli appunti',
+                        onPressed: () async {
+                          final clip = await Clipboard.getData(
+                            Clipboard.kTextPlain,
+                          );
+                          if (clip?.text != null) {
+                            ctrl.text = clip!.text!.trim();
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
+          actions: [
+            if (existing != null && existing.isNotEmpty)
+              TextButton(
+                onPressed: () async {
+                  await _keysService.deleteApiKey(_provider);
+                  await _loadStoredKey();
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: Text(
+                  'Elimina',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                await _keysService.saveApiKey(_provider, ctrl.text);
+                await _loadStoredKey();
+                if (ctx.mounted) Navigator.pop(ctx);
+                await _testAiConnection();
+              },
+              child: const Text('Salva e Testa'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              await _keysService.saveApiKey(_provider, ctrl.text);
-              await _loadStoredKey();
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Salva in Keystore'),
-          ),
-        ],
       ),
     );
   }
@@ -324,7 +378,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() {
       _isTestingAi = true;
-      _aiTestStatus = null;
+      _aiTestStatus = 'Verifica in corso...';
     });
 
     final sw = Stopwatch()..start();
@@ -343,11 +397,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _aiTestStatus = '✓ Connessione OK (${sw.elapsedMilliseconds} ms)';
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Connessione AI verificata con successo in ${sw.elapsedMilliseconds} ms!',
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
+      final cleanErr = e.toString().replaceFirst('Exception: ', '');
       setState(() {
-        _aiTestStatus = 'Errore: verifica la API Key inserita';
+        _aiTestStatus = 'Errore AI (tocca per riprovare)';
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 6),
+          content: Text('Errore test AI: $cleanErr'),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isTestingAi = false);
     }
@@ -487,10 +555,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                   selected: {_provider},
                   onSelectionChanged: (s) {
+                    final newProv = s.first;
                     setState(() {
-                      _provider = s.first;
+                      _provider = newProv;
                       _aiTestStatus = null;
                     });
+                    widget.onProfileChanged(
+                      UserProfile(
+                        sex: p.sex,
+                        birthYear: p.birthYear,
+                        heightCm: p.heightCm,
+                        currentWeightKg: p.currentWeightKg,
+                        activityMultiplier: p.activityMultiplier,
+                        goalType: p.goalType,
+                        isManualOverride: p.isManualOverride,
+                        targetKcal: p.targetKcal,
+                        targetProteinG: p.targetProteinG,
+                        targetCarbsG: p.targetCarbsG,
+                        targetFatG: p.targetFatG,
+                        targetFiberG: p.targetFiberG,
+                        targetWaterMl: p.targetWaterMl,
+                        preferredAiProvider: newProv,
+                        preferredAiModel: newProv == AiProviderType.gemini
+                            ? 'gemini-2.5-flash'
+                            : 'gpt-4o-mini',
+                        autoBackupEnabled: _autoBackup,
+                      ),
+                    );
                     _loadStoredKey();
                   },
                 ),

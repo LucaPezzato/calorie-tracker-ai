@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../models/nutrition_models.dart';
 import '../theme/app_theme.dart';
 import '../theme/nutrient_colors.dart';
@@ -9,6 +10,8 @@ class TodayScreen extends StatelessWidget {
   final List<MealEntry> meals;
   final ValueChanged<int> onAddWater;
   final VoidCallback onTapWeight;
+  final ValueChanged<MealEntry> onDeleteMeal;
+  final ValueChanged<MealEntry> onEditMeal;
 
   const TodayScreen({
     super.key,
@@ -17,6 +20,8 @@ class TodayScreen extends StatelessWidget {
     required this.meals,
     required this.onAddWater,
     required this.onTapWeight,
+    required this.onDeleteMeal,
+    required this.onEditMeal,
   });
 
   int get _consumedKcal => meals.fold(0, (s, m) => s + m.totalKcal);
@@ -192,17 +197,27 @@ class TodayScreen extends StatelessWidget {
                       const SizedBox(height: 10),
                       Row(
                         children: [
+                          if (metrics.waterMl > 0) ...[
+                            Expanded(
+                              child: _WaterQuickButton(
+                                label: '-250',
+                                color: cs.error,
+                                onTap: () => onAddWater(-250),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
                           Expanded(
                             child: _WaterQuickButton(
-                              label: '+250ml',
+                              label: '+250',
                               color: nutrients.water,
                               onTap: () => onAddWater(250),
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 4),
                           Expanded(
                             child: _WaterQuickButton(
-                              label: '+500ml',
+                              label: '+500',
                               color: nutrients.water,
                               onTap: () => onAddWater(500),
                             ),
@@ -298,9 +313,9 @@ class TodayScreen extends StatelessWidget {
               ),
             ),
             Text(
-              'Ordine cronologico',
+              'Tocca per modificare • Scorri per eliminare',
               style: tt.bodyMedium?.copyWith(
-                fontSize: 12,
+                fontSize: 11,
                 color: cs.onSurfaceVariant,
               ),
             ),
@@ -308,83 +323,158 @@ class TodayScreen extends StatelessWidget {
         ),
         const SizedBox(height: 10),
 
+        if (meals.isEmpty)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  Icon(
+                    Symbols.restaurant_rounded,
+                    size: 36,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Nessun pasto registrato oggi',
+                    style: tt.titleMedium?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Premi "+ Aggiungi Pasto" per iniziare',
+                    style: tt.bodyMedium?.copyWith(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
         ...meals.map(
           (meal) => Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Dismissible(
+              key: ValueKey('meal_${meal.id}'),
+              direction: DismissDirection.endToStart,
+              onDismissed: (_) => onDeleteMeal(meal),
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: BoxDecoration(
+                  color: cs.errorContainer,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+                ),
+                child: Icon(
+                  Symbols.delete_rounded,
+                  color: cs.onErrorContainer,
+                ),
+              ),
+              child: Card(
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => onEditMeal(meal),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 9,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: cs.primaryContainer,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            meal.loggedAt,
-                            style: tt.labelMedium?.copyWith(color: cs.primary),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: cs.primaryContainer,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                meal.loggedAt,
+                                style: tt.labelMedium?.copyWith(
+                                  color: cs.primary,
+                                ),
+                              ),
+                            ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '${meal.totalKcal} kcal',
+                                  style: tt.labelMedium?.copyWith(
+                                    fontSize: 13,
+                                    color: cs.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 28,
+                                    minHeight: 28,
+                                  ),
+                                  icon: Icon(
+                                    Symbols.delete_outline_rounded,
+                                    size: 18,
+                                    color: cs.error,
+                                  ),
+                                  tooltip: 'Elimina pasto',
+                                  onPressed: () => onDeleteMeal(meal),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(meal.title, style: tt.titleMedium),
+                        const SizedBox(height: 3),
+                        Text(
+                          meal.items
+                              .map((i) => '${i.name} (${i.grams.round()}g)')
+                              .join(' • '),
+                          style: tt.bodyMedium?.copyWith(
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant,
                           ),
                         ),
-                        Text(
-                          '${meal.totalKcal} kcal',
-                          style: tt.labelMedium?.copyWith(
-                            fontSize: 13,
-                            color: cs.primary,
-                          ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 4,
+                          children: [
+                            Text(
+                              'P: ${meal.totalProteinG.round()}g',
+                              style: tt.labelSmall?.copyWith(
+                                color: nutrients.protein,
+                              ),
+                            ),
+                            Text(
+                              'C: ${meal.totalCarbsG.round()}g',
+                              style: tt.labelSmall?.copyWith(
+                                color: nutrients.carbs,
+                              ),
+                            ),
+                            Text(
+                              'G: ${meal.totalFatG.round()}g',
+                              style: tt.labelSmall?.copyWith(
+                                color: nutrients.fat,
+                              ),
+                            ),
+                            Text(
+                              'F: ${meal.totalFiberG.round()}g',
+                              style: tt.labelSmall?.copyWith(
+                                color: nutrients.fiber,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(meal.title, style: tt.titleMedium),
-                    const SizedBox(height: 3),
-                    Text(
-                      meal.items
-                          .map((i) => '${i.name} (${i.grams.round()}g)')
-                          .join(' • '),
-                      style: tt.bodyMedium?.copyWith(
-                        fontSize: 12,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 4,
-                      children: [
-                        Text(
-                          'P: ${meal.totalProteinG.round()}g',
-                          style: tt.labelSmall?.copyWith(
-                            color: nutrients.protein,
-                          ),
-                        ),
-                        Text(
-                          'C: ${meal.totalCarbsG.round()}g',
-                          style: tt.labelSmall?.copyWith(
-                            color: nutrients.carbs,
-                          ),
-                        ),
-                        Text(
-                          'G: ${meal.totalFatG.round()}g',
-                          style: tt.labelSmall?.copyWith(color: nutrients.fat),
-                        ),
-                        Text(
-                          'F: ${meal.totalFiberG.round()}g',
-                          style: tt.labelSmall?.copyWith(
-                            color: nutrients.fiber,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),

@@ -58,71 +58,12 @@ class _MainShellScreenState extends State<MainShellScreen> {
   final String _todayDate = DateTime.now().toIso8601String().split('T').first;
 
   UserProfile _profile = const UserProfile();
-  DailyMetrics _metrics = const DailyMetrics(
-    date: '2026-11-10',
+  late DailyMetrics _metrics = DailyMetrics(
+    date: _todayDate,
     waterMl: 1500,
     weightKg: 74.2,
   );
-  List<MealEntry> _meals = [
-    const MealEntry(
-      id: 'm1',
-      date: '2026-11-10',
-      loggedAt: '08:30',
-      title: 'Yogurt greco, avena e miele',
-      items: [
-        MealItem(
-          id: 'i1',
-          mealId: 'm1',
-          name: 'Yogurt greco 0%',
-          grams: 170,
-          kcalPer100g: 54,
-          proteinPer100g: 10.3,
-          carbsPer100g: 3.0,
-          fatPer100g: 0,
-        ),
-        MealItem(
-          id: 'i2',
-          mealId: 'm1',
-          name: 'Fiocchi d\'avena',
-          grams: 40,
-          kcalPer100g: 375,
-          proteinPer100g: 13.5,
-          carbsPer100g: 60.0,
-          fatPer100g: 7.0,
-          fiberPer100g: 10.0,
-        ),
-      ],
-    ),
-    const MealEntry(
-      id: 'm2',
-      date: '2026-11-10',
-      loggedAt: '13:15',
-      title: 'Pasta integrale al tonno',
-      items: [
-        MealItem(
-          id: 'i3',
-          mealId: 'm2',
-          name: 'Pasta integrale',
-          grams: 100,
-          kcalPer100g: 351,
-          proteinPer100g: 14.5,
-          carbsPer100g: 66.0,
-          fatPer100g: 2.0,
-          fiberPer100g: 6.5,
-        ),
-        MealItem(
-          id: 'i4',
-          mealId: 'm2',
-          name: 'Tonno al naturale',
-          grams: 120,
-          kcalPer100g: 108,
-          proteinPer100g: 24.0,
-          carbsPer100g: 0,
-          fatPer100g: 1.0,
-        ),
-      ],
-    ),
-  ];
+  List<MealEntry> _meals = [];
 
   @override
   void initState() {
@@ -132,18 +73,55 @@ class _MainShellScreenState extends State<MainShellScreen> {
         _driveService.scheduleAutoBackup();
       }
     };
+    _loadFromDatabase();
   }
 
-  void _openAddMealSheet() {
+  Future<void> _loadFromDatabase() async {
+    final meals = await LocalDatabase.instance.getMealsForDate(_todayDate);
+    final metrics = await LocalDatabase.instance.getDailyMetrics(_todayDate);
+    if (!mounted) return;
+    setState(() {
+      _meals = meals;
+      _metrics = metrics;
+    });
+  }
+
+  Future<void> _deleteMeal(MealEntry meal) async {
+    setState(() {
+      _meals = _meals.where((m) => m.id != meal.id).toList();
+    });
+    await LocalDatabase.instance.deleteMealEntry(meal.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Pasto "${meal.title}" eliminato'),
+        action: SnackBarAction(
+          label: 'Annulla',
+          onPressed: () async {
+            await LocalDatabase.instance.saveMealEntry(meal);
+            await _loadFromDatabase();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _openMealSheet({MealEntry? existingMeal}) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (_) => AddMealBottomSheet(
         selectedDate: _todayDate,
         profile: _profile,
+        existingMeal: existingMeal,
+        onDeleteMeal: existingMeal != null
+            ? () => _deleteMeal(existingMeal)
+            : null,
         onSaveMeal: (entry) {
           setState(() {
-            _meals = [..._meals, entry]
+            final withoutOld = _meals.where((m) => m.id != entry.id).toList();
+            _meals = [...withoutOld, entry]
               ..sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
           });
           LocalDatabase.instance.saveMealEntry(entry);
@@ -248,11 +226,15 @@ class _MainShellScreenState extends State<MainShellScreen> {
             meals: _meals,
             onAddWater: (ml) {
               setState(() {
-                _metrics = _metrics.copyWith(waterMl: _metrics.waterMl + ml);
+                _metrics = _metrics.copyWith(
+                  waterMl: (_metrics.waterMl + ml).clamp(0, 10000),
+                );
               });
               LocalDatabase.instance.upsertDailyMetrics(_metrics);
             },
             onTapWeight: _openWeightDialog,
+            onDeleteMeal: _deleteMeal,
+            onEditMeal: (meal) => _openMealSheet(existingMeal: meal),
           ),
           StatsScreen(profile: _profile),
           PantryScreen(
@@ -278,7 +260,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton.extended(
-              onPressed: _openAddMealSheet,
+              onPressed: () => _openMealSheet(),
               icon: const Icon(Symbols.add_rounded),
               label: const Text('Aggiungi Pasto'),
             )
