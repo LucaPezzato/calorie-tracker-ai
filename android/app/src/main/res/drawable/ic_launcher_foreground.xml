@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <!-- Scaled to 64% inside the 108dp canvas so it fits Android Adaptive Icon & Android 12 Splash circular mask -->
+    <group
+        android:scaleX="0.64"
+        android:scaleY="0.64"
+        android:pivotX="512"
+        android:pivotY="512">
+
+        <!-- Outer Subtle Ring -->
+        <path
+            android:pathData="M512,182 A330,330 0 1,1 511.9,182 Z"
+            android:strokeWidth="52"
+            android:strokeColor="#1F332B"
+            android:fillColor="#00000000" />
+
+        <!-- Top-Right Coral Red Protein Arc -->
+        <path
+            android:pathData="M558,185 A330,330 0 0,1 825,405"
+            android:strokeWidth="52"
+            android:strokeLineCap="round"
+            android:strokeColor="#FF6B6B"
+            android:fillColor="#00000000" />
+
+        <!-- Bottom-Right Warm Amber Carbs Arc -->
+        <path
+            android:pathData="M838,478 A330,330 0 0,1 676,798"
+            android:strokeWidth="52"
+            android:strokeLineCap="round"
+            android:strokeColor="#FBBF24"
+            android:fillColor="#00000000" />
+
+        <!-- Bottom-Left Soft Purple Fat Arc -->
+        <path
+            android:pathData="M590,832 A330,330 0 0,1 286,752"
+            android:strokeWidth="52"
+            android:strokeLineCap="round"
+            android:strokeColor="#C084FC"
+            android:fillColor="#00000000" />
+
+        <!-- Left-Top Primary Emerald Calorie Arc -->
+        <path
+            android:pathData="M228,680 A330,330 0 0,1 462,186"
+            android:strokeWidth="52"
+            android:strokeLineCap="round"
+            android:strokeColor="#5EEAD4"
+            android:fillColor="#00000000" />
+
+        <!-- Center Calorie Flame (Emerald Mint) -->
+        <path
+            android:fillColor="#34D399"
+            android:pathData="M518,258 C540,330 650,382 650,526 C650,618 586,688 512,688 C438,688 374,618 374,526 C374,446 424,392 448,352 C452,402 482,424 496,428 C478,366 492,302 518,258 Z" />
+
+        <!-- Inner Flame Core (Warm Amber) -->
+        <path
+            android:fillColor="#FBBF24"
+            android:pathData="M514,448 C534,486 578,518 578,578 C578,624 548,656 512,656 C476,656 446,624 446,578 C446,534 484,494 514,448 Z" />
+
+        <!-- AI Sparkle Star -->
+        <path
+            android:fillColor="#E2F1EA"
+            android:pathData="M684,242 Q684,312 754,312 Q684,312 684,382 Q684,312 614,312 Q684,312 684,242 Z" />
+    </group>
+</vector>

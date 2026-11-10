@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="42%" r="65%">
+      <stop offset="0%" stop-color="#1D332A"/>
+      <stop offset="100%" stop-color="#0F1512"/>
+    </radialGradient>
+    <linearGradient id="flameGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6EE7B7"/>
+      <stop offset="55%" stop-color="#34D399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="innerFlame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FDE68A"/>
+      <stop offset="100%" stop-color="#FBBF24"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Squircle / Adaptive Background -->
+  <rect width="1024" height="1024" rx="224" fill="url(#bgGlow)"/>
+
+  <!-- Outer Subtle Track Ring -->
+  <circle cx="512" cy="512" r="330" fill="none" stroke="#1E2D26" stroke-width="48"/>
+
+  <!-- 3 Semantic Macro Arcs + Primary Calorie Arc -->
+  <!-- Protein Coral Red Arc -->
+  <circle cx="512" cy="512" r="330" fill="none" stroke="#FF6B6B" stroke-width="48"
+          stroke-dasharray="360 2100" stroke-dashoffset="-40" stroke-linecap="round"
+          transform="rotate(-90 512 512)"/>
+  <!-- Carbs Amber Arc -->
+  <circle cx="512" cy="512" r="330" fill="none" stroke="#FBBF24" stroke-width="48"
+          stroke-dasharray="360 2100" stroke-dashoffset="-490" stroke-linecap="round"
+          transform="rotate(-90 512 512)"/>
+  <!-- Fat Soft Purple Arc -->
+  <circle cx="512" cy="512" r="330" fill="none" stroke="#C084FC" stroke-width="48"
+          stroke-dasharray="280 2100" stroke-dashoffset="-940" stroke-linecap="round"
+          transform="rotate(-90 512 512)"/>
+  <!-- Primary Calorie Mint Arc -->
+  <circle cx="512" cy="512" r="330" fill="none" stroke="#5EEAD4" stroke-width="48"
+          stroke-dasharray="620 2100" stroke-dashoffset="-1320" stroke-linecap="round"
+          transform="rotate(-90 512 512)"/>
+
+  <!-- Center Expressive Calorie Flame -->
+  <path d="M518 258
+           C540 330, 650 382, 650 526
+           C650 618, 586 688, 512 688
+           C438 688, 374 618, 374 526
+           C374 446, 424 392, 448 352
+           C452 402, 482 424, 496 428
+           C478 366, 492 302, 518 258 Z"
+        fill="url(#flameGrad)"/>
+
+  <!-- Inner Warm Core -->
+  <path d="M514 448
+           C534 486, 578 518, 578 578
+           C578 624, 548 656, 512 656
+           C476 656, 446 624, 446 578
+           C446 534, 484 494, 514 448 Z"
+        fill="url(#innerFlame)"/>
+
+  <!-- AI Four-Point Sparkle Star (Top Right) -->
+  <path d="M684 250
+           Q684 316 750 316
+           Q684 316 684 382
+           Q684 316 618 316
+           Q684 316 684 250 Z"
+        fill="#E2F1EA"/>
+</svg>
