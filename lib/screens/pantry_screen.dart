@@ -130,18 +130,73 @@ class _PantryScreenState extends State<PantryScreen> {
             padding: const EdgeInsets.only(bottom: 10),
             child: Dismissible(
               key: ValueKey('fav_${fav.id}'),
-              direction: DismissDirection.endToStart,
+              direction: DismissDirection.horizontal,
+              confirmDismiss: (_) async {
+                return await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Rimuovi dalla Dispensa'),
+                        content: Text(
+                          'Vuoi davvero eliminare "${fav.name}" dalla Dispensa?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Annulla'),
+                          ),
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: cs.error,
+                              foregroundColor: cs.onError,
+                            ),
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Elimina'),
+                          ),
+                        ],
+                      ),
+                    ) ??
+                    false;
+              },
               onDismissed: (_) => _deleteFavorite(fav),
               background: Container(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: BoxDecoration(
+                  color: cs.errorContainer,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Symbols.delete_rounded, color: cs.onErrorContainer),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Elimina',
+                      style: tt.labelLarge?.copyWith(
+                        color: cs.onErrorContainer,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              secondaryBackground: Container(
                 alignment: Alignment.centerRight,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 decoration: BoxDecoration(
                   color: cs.errorContainer,
                   borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                 ),
-                child: Icon(
-                  Symbols.delete_rounded,
-                  color: cs.onErrorContainer,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Elimina',
+                      style: tt.labelLarge?.copyWith(
+                        color: cs.onErrorContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(Symbols.delete_rounded, color: cs.onErrorContainer),
+                  ],
                 ),
               ),
               child: Card(
@@ -187,15 +242,6 @@ class _PantryScreenState extends State<PantryScreen> {
                           ],
                         ),
                       ),
-                      IconButton(
-                        icon: Icon(
-                          Symbols.delete_outline_rounded,
-                          color: cs.error,
-                        ),
-                        tooltip: 'Elimina dalla Dispensa',
-                        onPressed: () => _deleteFavorite(fav),
-                      ),
-                      const SizedBox(width: 4),
                       IconButton.filledTonal(
                         icon: const Icon(Symbols.add_rounded),
                         tooltip: 'Aggiungi in 1 tap alla Timeline',

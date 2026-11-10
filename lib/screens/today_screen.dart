@@ -357,18 +357,73 @@ class TodayScreen extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 10),
             child: Dismissible(
               key: ValueKey('meal_${meal.id}'),
-              direction: DismissDirection.endToStart,
+              direction: DismissDirection.horizontal,
+              confirmDismiss: (_) async {
+                return await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Elimina pasto'),
+                        content: Text(
+                          'Vuoi davvero eliminare "${meal.title}" (${meal.loggedAt})?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Annulla'),
+                          ),
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: cs.error,
+                              foregroundColor: cs.onError,
+                            ),
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Elimina'),
+                          ),
+                        ],
+                      ),
+                    ) ??
+                    false;
+              },
               onDismissed: (_) => onDeleteMeal(meal),
               background: Container(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: BoxDecoration(
+                  color: cs.errorContainer,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Symbols.delete_rounded, color: cs.onErrorContainer),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Elimina',
+                      style: tt.labelLarge?.copyWith(
+                        color: cs.onErrorContainer,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              secondaryBackground: Container(
                 alignment: Alignment.centerRight,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 decoration: BoxDecoration(
                   color: cs.errorContainer,
                   borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                 ),
-                child: Icon(
-                  Symbols.delete_rounded,
-                  color: cs.onErrorContainer,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Elimina',
+                      style: tt.labelLarge?.copyWith(
+                        color: cs.onErrorContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(Symbols.delete_rounded, color: cs.onErrorContainer),
+                  ],
                 ),
               ),
               child: Card(
@@ -399,33 +454,12 @@ class TodayScreen extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  '${meal.totalKcal} kcal',
-                                  style: tt.labelMedium?.copyWith(
-                                    fontSize: 13,
-                                    color: cs.primary,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                IconButton(
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 28,
-                                    minHeight: 28,
-                                  ),
-                                  icon: Icon(
-                                    Symbols.delete_outline_rounded,
-                                    size: 18,
-                                    color: cs.error,
-                                  ),
-                                  tooltip: 'Elimina pasto',
-                                  onPressed: () => onDeleteMeal(meal),
-                                ),
-                              ],
+                            Text(
+                              '${meal.totalKcal} kcal',
+                              style: tt.labelMedium?.copyWith(
+                                fontSize: 13,
+                                color: cs.primary,
+                              ),
                             ),
                           ],
                         ),

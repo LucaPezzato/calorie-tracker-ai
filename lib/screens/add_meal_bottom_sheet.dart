@@ -263,7 +263,7 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
           controller: scrollController,
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
           children: [
-            // Header + Time Picker Pill + Delete Meal Option
+            // Header + Time Picker Pill
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -277,44 +277,26 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
                     style: tt.headlineSmall,
                   ),
                 ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (widget.existingMeal != null &&
-                        widget.onDeleteMeal != null)
-                      IconButton(
-                        icon: Icon(
-                          Symbols.delete_outline_rounded,
-                          color: cs.error,
-                        ),
-                        tooltip: 'Elimina intero pasto',
-                        onPressed: () {
-                          widget.onDeleteMeal!();
-                          Navigator.of(context).pop();
-                        },
-                      ),
-                    ActionChip(
-                      avatar: Icon(
-                        Symbols.schedule_rounded,
-                        size: 16,
-                        color: cs.primary,
-                      ),
-                      label: Text(_loggedAtTime, style: tt.labelMedium),
-                      shape: const StadiumBorder(),
-                      onPressed: () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay.now(),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            _loggedAtTime =
-                                '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-                          });
-                        }
-                      },
-                    ),
-                  ],
+                ActionChip(
+                  avatar: Icon(
+                    Symbols.schedule_rounded,
+                    size: 16,
+                    color: cs.primary,
+                  ),
+                  label: Text(_loggedAtTime, style: tt.labelMedium),
+                  shape: const StadiumBorder(),
+                  onPressed: () async {
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.now(),
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        _loggedAtTime =
+                            '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+                      });
+                    }
+                  },
                 ),
               ],
             ),
@@ -409,104 +391,166 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
             ),
             const SizedBox(height: 12),
 
-            // Interactive Ingredient Cards with 120fps Gram Sliders
+            // Interactive Ingredient Cards with 120fps Gram Sliders (Swipe + Confirm to delete)
             ...List.generate(_items.length, (index) {
               final item = _items[index];
               final maxSlider = item.grams > 350 ? 600.0 : 350.0;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: Card(
-                  color: cs.surfaceContainer,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '${index + 1}. ${item.name}',
-                                style: tt.titleMedium,
-                              ),
+                child: Dismissible(
+                  key: ValueKey('ing_${item.id}'),
+                  direction: DismissDirection.horizontal,
+                  confirmDismiss: (_) async {
+                    return await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Rimuovi ingrediente'),
+                            content: Text(
+                              'Vuoi rimuovere "${item.name}" (${item.grams.round()} g) da questo pasto?',
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Annulla'),
                               ),
-                              decoration: BoxDecoration(
-                                color: cs.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                '${item.grams.round()} g',
-                                style: tt.labelMedium?.copyWith(
-                                  color: cs.primary,
+                              FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: cs.error,
+                                  foregroundColor: cs.onError,
                                 ),
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Elimina'),
                               ),
-                            ),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 30,
-                                minHeight: 30,
-                              ),
-                              icon: Icon(
-                                Symbols.delete_outline_rounded,
-                                size: 19,
-                                color: cs.error,
-                              ),
-                              tooltip: 'Rimuovi ingrediente',
-                              onPressed: () {
-                                setState(() {
-                                  _items.removeAt(index);
-                                });
-                              },
-                            ),
-                          ],
+                            ],
+                          ),
+                        ) ??
+                        false;
+                  },
+                  onDismissed: (_) {
+                    setState(() {
+                      _items.removeAt(index);
+                    });
+                  },
+                  background: Container(
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    decoration: BoxDecoration(
+                      color: cs.errorContainer,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Symbols.delete_rounded,
+                          color: cs.onErrorContainer,
                         ),
-                        Slider(
-                          value: item.grams.clamp(0.0, maxSlider),
-                          min: 0,
-                          max: maxSlider,
-                          divisions: (maxSlider / 5).round(),
-                          onChanged: (val) {
-                            setState(() {
-                              _items[index] = item.copyWith(grams: val);
-                            });
-                          },
-                        ),
-                        Row(
-                          children: [
-                            Text('${item.kcal} kcal', style: tt.labelMedium),
-                            const SizedBox(width: 12),
-                            Text(
-                              'P: ${item.proteinG.round()}g',
-                              style: tt.labelSmall?.copyWith(
-                                color: nutrients.protein,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'C: ${item.carbsG.round()}g',
-                              style: tt.labelSmall?.copyWith(
-                                color: nutrients.carbs,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'G: ${item.fatG.round()}g',
-                              style: tt.labelSmall?.copyWith(
-                                color: nutrients.fat,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 8),
+                        Text(
+                          'Elimina',
+                          style: tt.labelLarge?.copyWith(
+                            color: cs.onErrorContainer,
+                          ),
                         ),
                       ],
+                    ),
+                  ),
+                  secondaryBackground: Container(
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    decoration: BoxDecoration(
+                      color: cs.errorContainer,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusCard),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                          'Elimina',
+                          style: tt.labelLarge?.copyWith(
+                            color: cs.onErrorContainer,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Symbols.delete_rounded,
+                          color: cs.onErrorContainer,
+                        ),
+                      ],
+                    ),
+                  ),
+                  child: Card(
+                    color: cs.surfaceContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '${index + 1}. ${item.name}',
+                                  style: tt.titleMedium,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: cs.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  '${item.grams.round()} g',
+                                  style: tt.labelMedium?.copyWith(
+                                    color: cs.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Slider(
+                            value: item.grams.clamp(0.0, maxSlider),
+                            min: 0,
+                            max: maxSlider,
+                            divisions: (maxSlider / 5).round(),
+                            onChanged: (val) {
+                              setState(() {
+                                _items[index] = item.copyWith(grams: val);
+                              });
+                            },
+                          ),
+                          Row(
+                            children: [
+                              Text('${item.kcal} kcal', style: tt.labelMedium),
+                              const SizedBox(width: 12),
+                              Text(
+                                'P: ${item.proteinG.round()}g',
+                                style: tt.labelSmall?.copyWith(
+                                  color: nutrients.protein,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                'C: ${item.carbsG.round()}g',
+                                style: tt.labelSmall?.copyWith(
+                                  color: nutrients.carbs,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                'G: ${item.fatG.round()}g',
+                                style: tt.labelSmall?.copyWith(
+                                  color: nutrients.fat,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
