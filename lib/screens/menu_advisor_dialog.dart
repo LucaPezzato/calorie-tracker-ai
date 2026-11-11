@@ -132,7 +132,7 @@ class _MenuAdvisorDialogState extends State<MenuAdvisorDialog> {
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppTheme.radiusHero),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSheet),
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520, maxHeight: 720),

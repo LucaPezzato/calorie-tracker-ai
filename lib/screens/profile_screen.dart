@@ -82,6 +82,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     double? weightKg,
     double? activityMultiplier,
     GoalType? newGoal,
+    double proteinPerKg = 1.6,
   }) {
     final g = newGoal ?? _goalType;
     setState(() {
@@ -96,6 +97,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       activityMultiplier:
           activityMultiplier ?? widget.profile.activityMultiplier,
       goalType: g,
+      proteinPerKg: proteinPerKg,
       preferredAiProvider: _provider,
       preferredAiModel: _provider == AiProviderType.gemini
           ? 'gemini-2.5-flash'
@@ -114,6 +116,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       text: p.currentWeightKg.toStringAsFixed(1),
     );
     double activity = p.activityMultiplier;
+    double proteinRatio = 1.6;
 
     await showDialog<void>(
       context: context,
@@ -172,6 +175,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onChanged: (v) =>
                       setDialogState(() => activity = v ?? 1.55),
                 ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<double>(
+                  initialValue: proteinRatio,
+                  decoration: const InputDecoration(
+                    labelText: 'Apporto Proteico',
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 1.2,
+                      child: Text('Base / OMS (1,2 g/kg)'),
+                    ),
+                    DropdownMenuItem(
+                      value: 1.4,
+                      child: Text('Bilanciato (1,4 g/kg)'),
+                    ),
+                    DropdownMenuItem(
+                      value: 1.6,
+                      child: Text('Fitness / Consigliato (1,6 g/kg)'),
+                    ),
+                    DropdownMenuItem(
+                      value: 2.0,
+                      child: Text('Ipertrofia / Atleta (2,0 g/kg)'),
+                    ),
+                  ],
+                  onChanged: (v) =>
+                      setDialogState(() => proteinRatio = v ?? 1.6),
+                ),
               ],
             ),
           ),
@@ -192,6 +222,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ) ??
                       p.currentWeightKg,
                   activityMultiplier: activity,
+                  proteinPerKg: proteinRatio,
                 );
                 Navigator.pop(ctx);
               },

@@ -8,6 +8,7 @@ class TodayScreen extends StatelessWidget {
   final UserProfile profile;
   final DailyMetrics metrics;
   final List<MealEntry> meals;
+  final double? previousWeightKg;
   final ValueChanged<int> onAddWater;
   final ValueChanged<int> onUpdateCoffee;
   final VoidCallback onTapWeight;
@@ -20,6 +21,7 @@ class TodayScreen extends StatelessWidget {
     required this.profile,
     required this.metrics,
     required this.meals,
+    this.previousWeightKg,
     required this.onAddWater,
     required this.onUpdateCoffee,
     required this.onTapWeight,
@@ -374,28 +376,44 @@ class TodayScreen extends StatelessWidget {
                                 style: tt.titleMedium?.copyWith(fontSize: 13.5),
                               ),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: cs.surfaceDim,
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: cs.outlineVariant.withValues(alpha: 0.25),
-                                ),
-                              ),
-                              child: Text(
-                                '-0,3 kg',
-                                style: tt.labelSmall?.copyWith(
-                                  fontSize: 9.5,
-                                  color: nutrients.fiber,
-                                  fontFeatures: const [
-                                    FontFeature.tabularFigures(),
-                                  ],
-                                ),
-                              ),
+                            Builder(
+                              builder: (context) {
+                                final current = metrics.weightKg ?? profile.currentWeightKg;
+                                final base = previousWeightKg ?? profile.currentWeightKg;
+                                final delta = current - base;
+                                final isLoss = delta < -0.01;
+                                final isGain = delta > 0.01;
+                                final deltaColor = isLoss
+                                    ? nutrients.fiber
+                                    : (isGain ? Colors.orangeAccent : cs.onSurfaceVariant);
+                                final deltaText = delta.abs() < 0.01
+                                    ? '0,0 kg'
+                                    : '${delta > 0 ? '+' : ''}${delta.toStringAsFixed(1).replaceAll('.', ',')} kg';
+
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: cs.surfaceDim,
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: cs.outlineVariant.withValues(alpha: 0.25),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    deltaText,
+                                    style: tt.labelSmall?.copyWith(
+                                      fontSize: 9.5,
+                                      color: deltaColor,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),

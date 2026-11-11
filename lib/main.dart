@@ -66,6 +66,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
     weightKg: 74.2,
   );
   List<MealEntry> _meals = [];
+  double? _previousWeightKg;
 
   @override
   void initState() {
@@ -82,11 +83,13 @@ class _MainShellScreenState extends State<MainShellScreen> {
     final meals = await LocalDatabase.instance.getMealsForDate(_todayDate);
     final metrics = await LocalDatabase.instance.getDailyMetrics(_todayDate);
     final profile = await LocalDatabase.instance.getUserProfile();
+    final prevWeight = await LocalDatabase.instance.getPreviousLoggedWeight(_todayDate);
     if (!mounted) return;
     setState(() {
       _meals = meals;
       _metrics = metrics;
       _profile = profile;
+      _previousWeightKg = prevWeight;
     });
   }
 
@@ -286,6 +289,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
             profile: _profile,
             metrics: _metrics,
             meals: _meals,
+            previousWeightKg: _previousWeightKg,
             onAddWater: (ml) {
               setState(() {
                 _metrics = _metrics.copyWith(

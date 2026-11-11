@@ -6,10 +6,12 @@ class AppTheme {
   /// Default seed color (refined botanical sage / emerald)
   static const Color defaultSeedColor = Color(0xFF10B981);
 
-  static const double radiusHero = 20.0;
-  static const double radiusCard = 16.0;
-  static const double radiusSmall = 10.0;
-  static const double radiusInner = 8.0;
+  // Material 3 Expressive Corner Radius Scale (tokens.md)
+  static const double radiusHero = 32.0; // CornerExtraLargeIncreased
+  static const double radiusSheet = 28.0; // CornerExtraLargeTop
+  static const double radiusCard = 20.0; // CornerLargeIncreased
+  static const double radiusSmall = 12.0; // CornerMedium
+  static const double radiusInner = 12.0; // Optical nested radius
 
   static ThemeData buildTheme({
     ColorScheme? dynamicScheme,
@@ -114,7 +116,7 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         showDragHandle: true,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(radiusHero)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(radiusSheet)),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(

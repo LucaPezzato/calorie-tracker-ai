@@ -53,6 +53,7 @@ class UserProfile {
     required double weightKg,
     required double activityMultiplier,
     required GoalType goalType,
+    double proteinPerKg = 1.6,
     AiProviderType preferredAiProvider = AiProviderType.gemini,
     String preferredAiModel = 'gemini-2.5-flash',
     bool autoBackupEnabled = true,
@@ -71,8 +72,9 @@ class UserProfile {
       GoalType.surplus => (tdee * 1.10).round(),
     };
 
-    final proteinG = (weightKg * 2.0).roundToDouble();
-    final fatG = (weightKg * 0.9).roundToDouble();
+    // Scientific fitness guideline (SINU / ISSN / Morton et al.): 1.6 g/kg is optimal
+    final proteinG = (weightKg * proteinPerKg).roundToDouble();
+    final fatG = (weightKg * 0.8).roundToDouble();
     final remainingKcal = (adjustedKcal - (proteinG * 4) - (fatG * 9)).clamp(
       200.0,
       5000.0,

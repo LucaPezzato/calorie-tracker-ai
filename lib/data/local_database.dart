@@ -421,6 +421,23 @@ class LocalDatabase {
     );
   }
 
+  /// Returns the most recently logged weight before the specified date
+  Future<double?> getPreviousLoggedWeight(String beforeDate) async {
+    final db = await database;
+    final rows = await db.query(
+      'daily_metrics',
+      columns: ['weight_kg'],
+      where: 'date < ? AND weight_kg IS NOT NULL',
+      whereArgs: [beforeDate],
+      orderBy: 'date DESC',
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      return (rows.first['weight_kg'] as num?)?.toDouble();
+    }
+    return null;
+  }
+
   Future<void> upsertDailyMetrics(DailyMetrics metrics) async {
     final db = await database;
     await db.insert(

@@ -46,13 +46,19 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
       autoStart: false,
     );
 
-    // Explicit single start after frame is mounted
+    // Explicit single start after frame is mounted with automatic front/back fallback
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         if (mounted) {
           await _cameraController.start();
         }
-      } catch (_) {}
+      } catch (_) {
+        try {
+          if (mounted) {
+            await _cameraController.switchCamera();
+          }
+        } catch (_) {}
+      }
     });
   }
 
@@ -177,7 +183,7 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppTheme.radiusHero),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSheet),
       ),
       backgroundColor: cs.surfaceContainerLow,
       child: ConstrainedBox(
