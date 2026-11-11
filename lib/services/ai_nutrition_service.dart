@@ -126,7 +126,7 @@ Non aggiungere markdown o testo fuori dal JSON.
     final response = await http.get(
       uri,
       headers: {'User-Agent': 'CalorieTrackerAI - Android - PersonalApp/1.0'},
-    );
+    ).timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) return null;
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -134,25 +134,78 @@ Non aggiungere markdown o testo fuori dal JSON.
 
     final product = data['product'] as Map<String, dynamic>;
     final nutriments = product['nutriments'] as Map<String, dynamic>? ?? {};
-    final name =
-        (product['product_name_it'] ??
-                product['product_name'] ??
-                'Prodotto $barcode')
-            .toString();
 
-    double numVal(String key) =>
-        (nutriments[key] as num?)?.toDouble() ?? 0.0;
+    // Get brand + name for better identification
+    final brand = (product['brands'] ?? '').toString().trim();
+    final rawName = (product['product_name_it'] ??
+            product['product_name'] ??
+            product['generic_name_it'] ??
+            product['generic_name'] ??
+            'Prodotto $barcode')
+        .toString()
+        .trim();
+
+    final name = (brand.isNotEmpty && !rawName.toLowerCase().contains(brand.toLowerCase()))
+        ? '$brand - $rawName'
+        : rawName;
+
+    double numVal(List<String> keys) {
+      for (final k in keys) {
+        final val = nutriments[k];
+        if (val is num && val > 0) return val.toDouble();
+        if (val is String) {
+          final parsed = double.tryParse(val.replaceAll(',', '.'));
+          if (parsed != null && parsed > 0) return parsed;
+        }
+      }
+      return 0.0;
+    }
+
+    // Try kcal first, fallback to kJ / 4.184
+    double kcal = numVal([
+      'energy-kcal_100g',
+      'energy-kcal_value',
+      'energy-kcal',
+      'energy_kcal_100g',
+    ]);
+    if (kcal <= 0) {
+      final kj = numVal(['energy_100g', 'energy-kj_100g', 'energy_value']);
+      if (kj > 0) {
+        kcal = (kj / 4.184).roundToDouble();
+      }
+    }
+
+    final p = numVal(['proteins_100g', 'proteins_value', 'proteins']);
+    final c = numVal(['carbohydrates_100g', 'carbohydrates_value', 'carbohydrates']);
+    final g = numVal(['fat_100g', 'fat_value', 'fat']);
+    final f = numVal(['fiber_100g', 'fiber_value', 'fiber']);
+
+    // Detect serving quantity if present (e.g. 150g or 1 vasetto)
+    double servingGrams = 100.0;
+    final sq = product['serving_quantity'];
+    if (sq is num && sq > 10 && sq < 1000) {
+      servingGrams = sq.toDouble();
+    } else if (product['serving_size'] != null) {
+      final match = RegExp(r'(\d+[\.,]?\d*)\s*g', caseSensitive: false)
+          .firstMatch(product['serving_size'].toString());
+      if (match != null) {
+        final parsed = double.tryParse(match.group(1)!.replaceAll(',', '.'));
+        if (parsed != null && parsed > 10 && parsed < 1000) {
+          servingGrams = parsed;
+        }
+      }
+    }
 
     return MealItem(
       id: _uuid.v4(),
       mealId: mealId,
       name: name,
-      grams: 100.0,
-      kcalPer100g: numVal('energy-kcal_100g'),
-      proteinPer100g: numVal('proteins_100g'),
-      carbsPer100g: numVal('carbohydrates_100g'),
-      fatPer100g: numVal('fat_100g'),
-      fiberPer100g: numVal('fiber_100g'),
+      grams: servingGrams,
+      kcalPer100g: kcal,
+      proteinPer100g: p,
+      carbsPer100g: c,
+      fatPer100g: g,
+      fiberPer100g: f,
       source: MealItemSource.barcode,
       barcode: barcode,
     );

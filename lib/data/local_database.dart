@@ -445,5 +445,142 @@ class LocalDatabase {
     final file = File(path);
     await file.writeAsBytes(bytes, flush: true);
     await database;
+    onDataMutated?.call();
+  }
+
+  /// Exports the entire database content into a structured JSON map
+  Future<Map<String, dynamic>> exportDatabaseAsJson() async {
+    final db = await database;
+    final profiles = await db.query('user_profile');
+    final meals = await db.query('meal_entries');
+    final items = await db.query('meal_items');
+    final metrics = await db.query('daily_metrics');
+    final favorites = await db.query('favorite_foods');
+
+    return {
+      'version': 1,
+      'exported_at': DateTime.now().toIso8601String(),
+      'user_profile': profiles.isNotEmpty ? profiles.first : null,
+      'meal_entries': meals,
+      'meal_items': items,
+      'daily_metrics': metrics,
+      'favorite_foods': favorites,
+    };
+  }
+
+  /// Restores the entire database from a structured JSON map inside an atomic transaction
+  Future<void> importDatabaseFromJson(Map<String, dynamic> data) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      // 1. Restore Profile if present
+      if (data['user_profile'] is Map) {
+        final profMap = Map<String, dynamic>.from(data['user_profile'] as Map);
+        await txn.insert('user_profile', profMap, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+
+      // 2. Restore Meal Entries
+      if (data['meal_entries'] is List) {
+        await txn.delete('meal_items');
+        await txn.delete('meal_entries');
+        for (final m in data['meal_entries'] as List) {
+          if (m is Map) {
+            await txn.insert('meal_entries', Map<String, dynamic>.from(m), conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        }
+      }
+
+      // 3. Restore Meal Items
+      if (data['meal_items'] is List) {
+        for (final it in data['meal_items'] as List) {
+          if (it is Map) {
+            await txn.insert('meal_items', Map<String, dynamic>.from(it), conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        }
+      }
+
+      // 4. Restore Daily Metrics
+      if (data['daily_metrics'] is List) {
+        await txn.delete('daily_metrics');
+        for (final met in data['daily_metrics'] as List) {
+          if (met is Map) {
+            await txn.insert('daily_metrics', Map<String, dynamic>.from(met), conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        }
+      }
+
+      // 5. Restore Favorite Foods
+      if (data['favorite_foods'] is List) {
+        await txn.delete('favorite_foods');
+        for (final fav in data['favorite_foods'] as List) {
+          if (fav is Map) {
+            await txn.insert('favorite_foods', Map<String, dynamic>.from(fav), conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        }
+      }
+    });
+
+    onDataMutated?.call();
+  }
+
+  Future<UserProfile> getUserProfile() async {
+    final db = await database;
+    final rows = await db.query('user_profile', where: 'id = 1');
+    if (rows.isEmpty) return const UserProfile();
+    final r = rows.first;
+    return UserProfile(
+      sex: r['sex'] as String? ?? 'M',
+      birthYear: (r['birth_year'] as int?) ?? 1995,
+      heightCm: (r['height_cm'] as num?)?.toDouble() ?? 178.0,
+      currentWeightKg: (r['current_weight_kg'] as num?)?.toDouble() ?? 74.2,
+      activityMultiplier: (r['activity_multiplier'] as num?)?.toDouble() ?? 1.55,
+      goalType: GoalType.values.firstWhere(
+        (e) => e.name == (r['goal_type'] as String?),
+        orElse: () => GoalType.deficit,
+      ),
+      isManualOverride: (r['is_manual_override'] as int?) == 1,
+      targetKcal: (r['target_kcal'] as int?) ?? 2400,
+      targetProteinG: (r['target_protein_g'] as num?)?.toDouble() ?? 150.0,
+      targetCarbsG: (r['target_carbs_g'] as num?)?.toDouble() ?? 240.0,
+      targetFatG: (r['target_fat_g'] as num?)?.toDouble() ?? 65.0,
+      targetFiberG: (r['target_fiber_g'] as num?)?.toDouble() ?? 30.0,
+      targetWaterMl: (r['target_water_ml'] as int?) ?? 2500,
+      preferredAiProvider: (r['preferred_ai_provider'] as String?) == 'openai'
+          ? AiProviderType.openai
+          : AiProviderType.gemini,
+      preferredAiModel: (r['preferred_ai_model'] as String?) ?? 'gemini-2.5-flash',
+      autoBackupEnabled: (r['auto_backup_enabled'] as int?) != 0,
+      lastDriveBackupAt: r['last_drive_backup_at'] != null
+          ? DateTime.tryParse(r['last_drive_backup_at'] as String)
+          : null,
+    );
+  }
+
+  Future<void> saveUserProfile(UserProfile p) async {
+    final db = await database;
+    await db.insert(
+      'user_profile',
+      {
+        'id': 1,
+        'sex': p.sex,
+        'birth_year': p.birthYear,
+        'height_cm': p.heightCm,
+        'current_weight_kg': p.currentWeightKg,
+        'activity_multiplier': p.activityMultiplier,
+        'goal_type': p.goalType.name,
+        'is_manual_override': p.isManualOverride ? 1 : 0,
+        'target_kcal': p.targetKcal,
+        'target_protein_g': p.targetProteinG,
+        'target_carbs_g': p.targetCarbsG,
+        'target_fat_g': p.targetFatG,
+        'target_fiber_g': p.targetFiberG,
+        'target_water_ml': p.targetWaterMl,
+        'preferred_ai_provider': p.preferredAiProvider.name,
+        'preferred_ai_model': p.preferredAiModel,
+        'auto_backup_enabled': p.autoBackupEnabled ? 1 : 0,
+        'last_drive_backup_at': p.lastDriveBackupAt?.toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    onDataMutated?.call();
   }
 }

@@ -79,10 +79,12 @@ class _MainShellScreenState extends State<MainShellScreen> {
   Future<void> _loadFromDatabase() async {
     final meals = await LocalDatabase.instance.getMealsForDate(_todayDate);
     final metrics = await LocalDatabase.instance.getDailyMetrics(_todayDate);
+    final profile = await LocalDatabase.instance.getUserProfile();
     if (!mounted) return;
     setState(() {
       _meals = meals;
       _metrics = metrics;
+      _profile = profile;
     });
   }
 
@@ -252,7 +254,9 @@ class _MainShellScreenState extends State<MainShellScreen> {
             driveService: _driveService,
             onProfileChanged: (updated) {
               setState(() => _profile = updated);
+              LocalDatabase.instance.saveUserProfile(updated);
             },
+            onDatabaseRestored: _loadFromDatabase,
           ),
         ],
       ),

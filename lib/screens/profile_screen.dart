@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import '../data/local_database.dart';
 import '../models/nutrition_models.dart';
 import '../services/ai_nutrition_service.dart';
 import '../services/drive_backup_service.dart';
@@ -12,12 +14,14 @@ class ProfileScreen extends StatefulWidget {
   final UserProfile profile;
   final DriveBackupService driveService;
   final ValueChanged<UserProfile> onProfileChanged;
+  final VoidCallback? onDatabaseRestored;
 
   const ProfileScreen({
     super.key,
     required this.profile,
     required this.driveService,
     required this.onProfileChanged,
+    this.onDatabaseRestored,
   });
 
   @override
@@ -35,6 +39,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _maskedKey;
   String? _aiTestStatus;
   bool _isTestingAi = false;
+  bool _isBackingUp = false;
+  bool _isRestoring = false;
+  DateTime? _lastKnownDriveBackup;
 
   @override
   void initState() {
@@ -43,7 +50,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _goalType = widget.profile.goalType;
     _autoBackup = widget.profile.autoBackupEnabled;
     _manualOverride = widget.profile.isManualOverride;
+    _lastKnownDriveBackup = widget.profile.lastDriveBackupAt;
     _loadStoredKey();
+    _checkDriveBackupMetadata();
+  }
+
+  Future<void> _checkDriveBackupMetadata() async {
+    final info = await widget.driveService.getLatestBackupInfo();
+    if (info != null && mounted) {
+      setState(() => _lastKnownDriveBackup = info.modifiedTime);
+    }
   }
 
   Future<void> _loadStoredKey() async {
@@ -421,6 +437,318 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _handleGoogleSignIn() async {
+    try {
+      if (widget.driveService.currentUser != null) {
+        // Confirm sign out
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Disconnetti account Google'),
+            content: Text(
+              'Vuoi disconnettere "${widget.driveService.currentUser?.email}" da Google Drive?',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annulla')),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Disconnetti')),
+            ],
+          ),
+        );
+        if (confirm == true) {
+          await widget.driveService.signOut();
+          if (!mounted) return;
+          setState(() {});
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Account Google scollegato.')),
+          );
+        }
+        return;
+      }
+
+      final account = await widget.driveService.signInInteractive();
+      if (!mounted) return;
+      setState(() {});
+      if (account != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Connesso come ${account.email}')),
+        );
+        await _checkDriveBackupMetadata();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Stato Google Sign-In'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(msg),
+              const SizedBox(height: 12),
+              const Text(
+                'Nota: se stai testando la tua app Android personale senza Google Cloud OAuth, puoi sempre usare il pulsante "Backup & Ripristino Locale (File/JSON)" sottostante, che funziona offline al 100%.',
+                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Ho capito'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleDriveBackup() async {
+    setState(() => _isBackingUp = true);
+    try {
+      final date = await widget.driveService.backupNow();
+      if (!mounted) return;
+      setState(() => _lastKnownDriveBackup = date);
+      widget.onProfileChanged(widget.profile.copyWith(lastDriveBackupAt: date));
+      await LocalDatabase.instance.saveUserProfile(
+        widget.profile.copyWith(lastDriveBackupAt: date),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '✓ Backup su Google Drive completato con successo alle ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}!',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 6),
+          content: Text('Errore backup: $msg'),
+          action: SnackBarAction(
+            label: 'Info',
+            onPressed: () => _handleGoogleSignIn(),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isBackingUp = false);
+    }
+  }
+
+  Future<void> _handleDriveRestore() async {
+    if (widget.driveService.currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Effettua prima l\'accesso con Google toccando la card sopra.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isRestoring = true);
+    try {
+      final info = await widget.driveService.getLatestBackupInfo();
+      if (info == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nessun file di backup trovato su Google Drive per questo account.'),
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      final dateStr =
+          '${info.modifiedTime.day}/${info.modifiedTime.month}/${info.modifiedTime.year} alle ${info.modifiedTime.hour.toString().padLeft(2, '0')}:${info.modifiedTime.minute.toString().padLeft(2, '0')}';
+
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Ripristina da Google Drive'),
+          content: Text(
+            'Trovato backup del $dateStr.\n\nAttenzione: tutti i pasti e le metriche attuali sul telefono verranno sovrascritti con quelli del backup.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Ripristina ora'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm != true) return;
+
+      await widget.driveService.restoreFromDrive();
+      if (!mounted) return;
+
+      // Reload entire app memory
+      widget.onDatabaseRestored?.call();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 5),
+          content: Text('✓ Database ripristinato con successo da Google Drive ($dateStr)!'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(duration: const Duration(seconds: 6), content: Text('Errore ripristino: $msg')),
+      );
+    } finally {
+      if (mounted) setState(() => _isRestoring = false);
+    }
+  }
+
+  Future<void> _handleExportLocalBackup() async {
+    try {
+      final jsonMap = await LocalDatabase.instance.exportDatabaseAsJson();
+      final jsonText = const JsonEncoder.withIndent('  ').convert(jsonMap);
+      if (!mounted) return;
+
+      final mealsCount = (jsonMap['meal_entries'] as List?)?.length ?? 0;
+      final favsCount = (jsonMap['favorite_foods'] as List?)?.length ?? 0;
+
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Esporta Backup Locale (JSON)'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Backup generato con successo:\n• $mealsCount pasti registrati\n• $favsCount alimenti in dispensa',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Copia questo testo per salvarlo nelle tue note, inviarlo su Telegram o salvarlo dove preferisci:',
+                style: TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                height: 120,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceDim,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SingleChildScrollView(
+                  child: Text(
+                    jsonText,
+                    style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Chiudi'),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Symbols.content_copy_rounded, size: 16),
+              label: const Text('Copia Backup Negli Appunti'),
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: jsonText));
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                }
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('✓ Backup JSON copiato negli appunti!')),
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Errore esportazione backup: $e')),
+      );
+    }
+  }
+
+  Future<void> _handleImportLocalBackup() async {
+    final ctrl = TextEditingController();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ripristina da Backup Locale (JSON)'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Incolla qui il testo JSON del backup esportato in precedenza:',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: ctrl,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                hintText: '{\n  "version": 1,\n  "meal_entries": [...]\n}',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Verifica e Ripristina'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || ctrl.text.trim().isEmpty) return;
+
+    try {
+      final decoded = jsonDecode(ctrl.text.trim());
+      if (decoded is! Map<String, dynamic>) {
+        throw Exception('Formato non valido: deve essere un oggetto JSON.');
+      }
+      await LocalDatabase.instance.importDatabaseFromJson(decoded);
+      if (!mounted) return;
+
+      widget.onDatabaseRestored?.call();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✓ Database locale ripristinato con successo dal JSON!'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Errore importazione: formato JSON non valido ($e)')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -435,48 +763,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Card(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-            side: BorderSide(color: cs.primary, width: 1.2),
+            side: BorderSide(
+              color: widget.driveService.currentUser != null
+                  ? nutrients.fiber
+                  : cs.outlineVariant.withValues(alpha: 0.6),
+              width: 1.2,
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                InkWell(
-                  onTap: () async {
-                    await widget.driveService.signInInteractive();
-                    setState(() {});
-                  },
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 22,
-                        backgroundColor: cs.primary,
-                        foregroundColor: cs.onPrimary,
-                        child: Text('PZ', style: tt.titleMedium),
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: widget.driveService.currentUser != null
+                          ? nutrients.fiber
+                          : cs.surfaceContainerHighest,
+                      foregroundColor: widget.driveService.currentUser != null
+                          ? Colors.black
+                          : cs.onSurface,
+                      child: Icon(
+                        widget.driveService.currentUser != null
+                            ? Symbols.cloud_done_rounded
+                            : Symbols.cloud_off_rounded,
+                        size: 20,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.driveService.currentUser?.email ??
-                                  'Tocca per accedere con Google',
-                              style: tt.titleMedium,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.driveService.currentUser?.email ??
+                                'Google Drive non collegato',
+                            style: tt.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '☁️ Google Drive (appDataFolder) • Solo DB SQLite',
-                              style: tt.labelSmall?.copyWith(color: cs.primary),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _lastKnownDriveBackup != null
+                                ? 'Ultimo backup: ${_lastKnownDriveBackup!.day}/${_lastKnownDriveBackup!.month} alle ${_lastKnownDriveBackup!.hour.toString().padLeft(2, '0')}:${_lastKnownDriveBackup!.minute.toString().padLeft(2, '0')}'
+                                : '☁️ Drive appDataFolder • 0€/mese',
+                            style: tt.labelSmall?.copyWith(
+                              color: widget.driveService.currentUser != null
+                                  ? nutrients.fiber
+                                  : cs.onSurfaceVariant,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                      onPressed: _handleGoogleSignIn,
+                      child: Text(
+                        widget.driveService.currentUser != null
+                            ? 'Cambia'
+                            : 'Accedi',
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(
@@ -484,44 +840,102 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
                   ),
                   subtitle: Text(
-                    'Le foto restano solo nella cache del telefono',
+                    'Sincronizza SQLite in background (le foto restano solo sul telefono)',
                     style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                   value: _autoBackup,
-                  onChanged: (v) => setState(() => _autoBackup = v),
+                  onChanged: (v) {
+                    setState(() => _autoBackup = v);
+                    final updated = widget.profile.copyWith(autoBackupEnabled: v);
+                    widget.onProfileChanged(updated);
+                    LocalDatabase.instance.saveUserProfile(updated);
+                  },
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
                       child: FilledButton.icon(
-                        onPressed: () async {
-                          await widget.driveService.backupNow();
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Backup SQLite su Google Drive completato!',
-                                ),
-                              ),
-                            );
-                          }
-                        },
-                        icon: const Icon(Symbols.cloud_upload_rounded, size: 18),
-                        label: const Text('Backup Ora'),
+                        onPressed: _isBackingUp || _isRestoring
+                            ? null
+                            : _handleDriveBackup,
+                        icon: _isBackingUp
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Symbols.cloud_upload_rounded, size: 18),
+                        label: Text(_isBackingUp ? 'Salvataggio...' : 'Backup Ora'),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () async {
-                          await widget.driveService.restoreFromDrive();
-                        },
-                        icon: const Icon(
-                          Symbols.cloud_download_rounded,
-                          size: 18,
-                        ),
-                        label: const Text('Ripristina DB'),
+                        onPressed: _isBackingUp || _isRestoring
+                            ? null
+                            : _handleDriveRestore,
+                        icon: _isRestoring
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(
+                                Symbols.cloud_download_rounded,
+                                size: 18,
+                              ),
+                        label: Text(_isRestoring ? 'Download...' : 'Ripristina DB'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // 1B. LOCAL BACKUP & RESTORE CARD (100% OFFLINE / INDEPENDENT)
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Symbols.folder_zip_rounded, color: cs.primary, size: 22),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Backup & Ripristino Locale (Offline)',
+                        style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Esporta l\'intero database in formato JSON per conservarlo nelle note, inviarlo o ripristinarlo in qualsiasi momento senza account.',
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        onPressed: _handleExportLocalBackup,
+                        icon: const Icon(Symbols.upload_rounded, size: 17),
+                        label: const Text('Esporta JSON'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _handleImportLocalBackup,
+                        icon: const Icon(Symbols.download_rounded, size: 17),
+                        label: const Text('Importa JSON'),
                       ),
                     ),
                   ],

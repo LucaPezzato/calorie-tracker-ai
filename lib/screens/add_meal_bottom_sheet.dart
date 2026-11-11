@@ -494,21 +494,108 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
                                   style: tt.titleMedium,
                                 ),
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: cs.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  '${item.grams.round()} g',
-                                  style: tt.labelMedium?.copyWith(
-                                    color: cs.primary,
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Quick Half Portion Button
+                                  IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                    icon: const Text('½', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    tooltip: 'Dimezza porzione (mezza porzione)',
+                                    onPressed: () {
+                                      setState(() {
+                                        _items[index] = item.copyWith(
+                                          grams: (item.grams / 2).clamp(5.0, 1000.0),
+                                        );
+                                      });
+                                    },
                                   ),
-                                ),
+                                  // Quick Double Portion Button
+                                  IconButton(
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                    icon: const Text('2×', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    tooltip: 'Raddoppia porzione',
+                                    onPressed: () {
+                                      setState(() {
+                                        _items[index] = item.copyWith(
+                                          grams: (item.grams * 2).clamp(5.0, 1000.0),
+                                        );
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(width: 4),
+                                  // Tap to directly edit exact grams with keyboard
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(999),
+                                    onTap: () async {
+                                      final ctrl = TextEditingController(
+                                        text: item.grams.round().toString(),
+                                      );
+                                      final newGrams = await showDialog<double>(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          title: Text('Grammi: ${item.name}'),
+                                          content: TextField(
+                                            controller: ctrl,
+                                            autofocus: true,
+                                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                            decoration: const InputDecoration(
+                                              labelText: 'Grammi (g)',
+                                              suffixText: 'g',
+                                            ),
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(ctx),
+                                              child: const Text('Annulla'),
+                                            ),
+                                            FilledButton(
+                                              onPressed: () {
+                                                final val = double.tryParse(ctrl.text.replaceAll(',', '.'));
+                                                Navigator.pop(ctx, val);
+                                              },
+                                              child: const Text('Conferma'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      if (newGrams != null && newGrams > 0) {
+                                        setState(() {
+                                          _items[index] = item.copyWith(grams: newGrams);
+                                        });
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: cs.surfaceContainerHighest,
+                                        borderRadius: BorderRadius.circular(999),
+                                        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            '${item.grams.round()} g',
+                                            style: tt.labelMedium?.copyWith(
+                                              color: cs.primary,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Icon(Symbols.edit_rounded, size: 12, color: cs.primary),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),

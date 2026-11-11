@@ -99,6 +99,46 @@ class UserProfile {
       lastDriveBackupAt: lastDriveBackupAt,
     );
   }
+
+  UserProfile copyWith({
+    String? sex,
+    int? birthYear,
+    double? heightCm,
+    double? currentWeightKg,
+    double? activityMultiplier,
+    GoalType? goalType,
+    bool? isManualOverride,
+    int? targetKcal,
+    double? targetProteinG,
+    double? targetCarbsG,
+    double? targetFatG,
+    double? targetFiberG,
+    int? targetWaterMl,
+    AiProviderType? preferredAiProvider,
+    String? preferredAiModel,
+    bool? autoBackupEnabled,
+    DateTime? lastDriveBackupAt,
+  }) {
+    return UserProfile(
+      sex: sex ?? this.sex,
+      birthYear: birthYear ?? this.birthYear,
+      heightCm: heightCm ?? this.heightCm,
+      currentWeightKg: currentWeightKg ?? this.currentWeightKg,
+      activityMultiplier: activityMultiplier ?? this.activityMultiplier,
+      goalType: goalType ?? this.goalType,
+      isManualOverride: isManualOverride ?? this.isManualOverride,
+      targetKcal: targetKcal ?? this.targetKcal,
+      targetProteinG: targetProteinG ?? this.targetProteinG,
+      targetCarbsG: targetCarbsG ?? this.targetCarbsG,
+      targetFatG: targetFatG ?? this.targetFatG,
+      targetFiberG: targetFiberG ?? this.targetFiberG,
+      targetWaterMl: targetWaterMl ?? this.targetWaterMl,
+      preferredAiProvider: preferredAiProvider ?? this.preferredAiProvider,
+      preferredAiModel: preferredAiModel ?? this.preferredAiModel,
+      autoBackupEnabled: autoBackupEnabled ?? this.autoBackupEnabled,
+      lastDriveBackupAt: lastDriveBackupAt ?? this.lastDriveBackupAt,
+    );
+  }
 }
 
 class MealItem {
