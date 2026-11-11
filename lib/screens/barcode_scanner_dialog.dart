@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/nutrition_models.dart';
@@ -17,6 +18,8 @@ class BarcodeScannerDialog extends StatefulWidget {
 
 class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
   final AiNutritionService _aiService = AiNutritionService();
+  final ImagePicker _picker = ImagePicker();
+
   final TextEditingController _manualEanCtrl = TextEditingController(
     text: '5201054017415', // Fage Total 0% default test EAN
   );
@@ -35,12 +38,22 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
   void initState() {
     super.initState();
     _gramsCtrl = TextEditingController(text: '100');
+    // autoStart: false prevents duplicate initialization crash in Dialogs
     _cameraController = MobileScannerController(
       detectionSpeed: DetectionSpeed.noDuplicates,
       facing: CameraFacing.back,
       torchEnabled: false,
-      autoStart: true,
+      autoStart: false,
     );
+
+    // Explicit single start after frame is mounted
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        if (mounted) {
+          await _cameraController.start();
+        }
+      } catch (_) {}
+    });
   }
 
   @override
@@ -99,6 +112,37 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
     }
   }
 
+  Future<void> _pickAndScanImage() async {
+    try {
+      final xfile = await _picker.pickImage(source: ImageSource.gallery);
+      if (xfile == null) return;
+
+      setState(() => _isLoading = true);
+      final capture = await _cameraController.analyzeImage(xfile.path);
+      if (capture != null && capture.barcodes.isNotEmpty) {
+        final raw = capture.barcodes.first.rawValue;
+        if (raw != null && raw.trim().isNotEmpty) {
+          _manualEanCtrl.text = raw.trim();
+          await _lookupBarcode(raw.trim());
+          return;
+        }
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nessun codice a barre leggibile trovato nell\'immagine.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Errore lettura immagine: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   void _resetScanner() {
     setState(() {
       _foundProduct = null;
@@ -114,7 +158,6 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
     final tt = Theme.of(context).textTheme;
     final nutrients = context.nutrients;
 
-    // Real-time recalculated macros for current grams
     final currentKcal = _foundProduct != null
         ? ((_grams / 100.0) * _foundProduct!.kcalPer100g).round()
         : 0;
@@ -169,7 +212,7 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                   child: SizedBox(
-                    height: 180,
+                    height: 185,
                     width: double.infinity,
                     child: Stack(
                       alignment: Alignment.center,
@@ -177,33 +220,71 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
                         MobileScanner(
                           controller: _cameraController,
                           errorBuilder: (context, error, child) {
+                            // If controller was already started, not a fatal error
+                            if (error.errorCode ==
+                                MobileScannerErrorCode.controllerAlreadyInitialized) {
+                              return const SizedBox.shrink();
+                            }
+
+                            final isPerm = error.errorCode ==
+                                MobileScannerErrorCode.permissionDenied;
+                            final errText = isPerm
+                                ? 'Permesso fotocamera negato. Concedi il permesso nelle Impostazioni dell\'app o scansiona da foto/manuale.'
+                                : 'Fotocamera: ${error.errorDetails?.message ?? error.errorCode.message}';
+
                             return Container(
                               color: cs.surfaceDim,
-                              padding: const EdgeInsets.all(14),
+                              padding: const EdgeInsets.all(12),
                               alignment: Alignment.center,
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    Symbols.videocam_off_rounded,
-                                    size: 32,
+                                    isPerm
+                                        ? Symbols.no_photography_rounded
+                                        : Symbols.videocam_off_rounded,
+                                    size: 30,
                                     color: cs.error,
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    'Fotocamera non disponibile o permesso negato.',
+                                    errText,
                                     textAlign: TextAlign.center,
                                     style: tt.bodySmall?.copyWith(
                                       color: cs.onSurfaceVariant,
                                     ),
                                   ),
-                                  const SizedBox(height: 6),
-                                  FilledButton.tonal(
-                                    style: FilledButton.styleFrom(
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                    onPressed: () => _cameraController.start(),
-                                    child: const Text('Riprova'),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 6,
+                                    alignment: WrapAlignment.center,
+                                    children: [
+                                      FilledButton.tonal(
+                                        style: FilledButton.styleFrom(
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                        onPressed: () async {
+                                          try {
+                                            await _cameraController.stop();
+                                            await _cameraController.start();
+                                            if (mounted) setState(() {});
+                                          } catch (_) {}
+                                        },
+                                        child: const Text('Riprova'),
+                                      ),
+                                      OutlinedButton.icon(
+                                        style: OutlinedButton.styleFrom(
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                        icon: const Icon(
+                                          Symbols.image_rounded,
+                                          size: 16,
+                                        ),
+                                        label: const Text('Da Foto'),
+                                        onPressed: _pickAndScanImage,
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -234,7 +315,7 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
                           ),
                         ),
 
-                        // Camera controls overlay (Torch + Switch)
+                        // Camera controls overlay (Torch + Switch + Gallery)
                         Positioned(
                           top: 8,
                           right: 8,
@@ -247,22 +328,29 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
                                   _torchOn
                                       ? Symbols.flash_on_rounded
                                       : Symbols.flash_off_rounded,
-                                  size: 18,
+                                  size: 17,
                                 ),
                                 onPressed: () async {
                                   await _cameraController.toggleTorch();
                                   setState(() => _torchOn = !_torchOn);
                                 },
                               ),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 5),
                               IconButton.filledTonal(
                                 visualDensity: VisualDensity.compact,
                                 icon: const Icon(
                                   Symbols.flip_camera_android_rounded,
-                                  size: 18,
+                                  size: 17,
                                 ),
                                 onPressed: () =>
                                     _cameraController.switchCamera(),
+                              ),
+                              const SizedBox(width: 5),
+                              IconButton.filledTonal(
+                                visualDensity: VisualDensity.compact,
+                                tooltip: 'Scansiona da immagine in galleria',
+                                icon: const Icon(Symbols.image_rounded, size: 17),
+                                onPressed: _pickAndScanImage,
                               ),
                             ],
                           ),
