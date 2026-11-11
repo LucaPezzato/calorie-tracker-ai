@@ -19,6 +19,7 @@ class AddMealBottomSheet extends StatefulWidget {
   final MealEntry? existingMeal;
   final void Function(MealEntry entry) onSaveMeal;
   final VoidCallback? onDeleteMeal;
+  final VoidCallback? onOpenMenuAdvisor;
 
   const AddMealBottomSheet({
     super.key,
@@ -27,6 +28,7 @@ class AddMealBottomSheet extends StatefulWidget {
     this.existingMeal,
     required this.onSaveMeal,
     this.onDeleteMeal,
+    this.onOpenMenuAdvisor,
   });
 
   @override
@@ -270,39 +272,65 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
                 Flexible(
                   child: Text(
                     widget.existingMeal != null
-                        ? 'Modifica Pasto'
-                        : 'Aggiungi Pasto',
+                        ? 'Modifica pasto'
+                        : 'Aggiungi pasto',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: tt.headlineSmall,
                   ),
                 ),
-                ActionChip(
-                  avatar: Icon(
-                    Symbols.schedule_rounded,
-                    size: 16,
-                    color: cs.primary,
-                  ),
-                  label: Text(_loggedAtTime, style: tt.labelMedium),
-                  shape: const StadiumBorder(),
-                  onPressed: () async {
-                    final picked = await showTimePicker(
-                      context: context,
-                      initialTime: TimeOfDay.now(),
-                    );
-                    if (picked != null) {
-                      setState(() {
-                        _loggedAtTime =
-                            '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-                      });
-                    }
-                  },
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.onOpenMenuAdvisor != null && widget.existingMeal == null) ...[
+                      ActionChip(
+                        avatar: Icon(
+                          Symbols.restaurant_menu_rounded,
+                          size: 15,
+                          color: cs.primary,
+                        ),
+                        label: const Text('Menu'),
+                        shape: const StadiumBorder(),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          widget.onOpenMenuAdvisor!();
+                        },
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    ActionChip(
+                      avatar: Icon(
+                        Symbols.schedule_rounded,
+                        size: 16,
+                        color: cs.primary,
+                      ),
+                      label: Text(
+                        _loggedAtTime,
+                        style: tt.labelMedium?.copyWith(
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                      shape: const StadiumBorder(),
+                      onPressed: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.now(),
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            _loggedAtTime =
+                                '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+                          });
+                        }
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),
             const SizedBox(height: 14),
 
-            // 4-Way Mode Segmented Button
+            // 4-Way Mode Segmented Button (Single-line clean labels)
             SegmentedButton<int>(
               showSelectedIcon: false,
               style: const ButtonStyle(
@@ -310,24 +338,36 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               segments: const [
-                ButtonSegment(value: 0, label: Text('✨ Testo')),
-                ButtonSegment(value: 1, label: Text('📷 Foto')),
-                ButtonSegment(value: 2, label: Text('🏷️ EAN')),
-                ButtonSegment(value: 3, label: Text('⭐ Cibi')),
+                ButtonSegment(
+                  value: 0,
+                  label: Text('Testo'),
+                ),
+                ButtonSegment(
+                  value: 1,
+                  label: Text('Foto'),
+                ),
+                ButtonSegment(
+                  value: 2,
+                  label: Text('Barcode'),
+                ),
+                ButtonSegment(
+                  value: 3,
+                  label: Text('Dispensa'),
+                ),
               ],
               selected: {_selectedMode},
               onSelectionChanged: (s) => _onModeChanged(s.first),
             ),
             const SizedBox(height: 14),
 
-            // AI Prompt Box
+            // Prompt Box
             TextField(
               controller: _promptCtrl,
               maxLines: 2,
               decoration: InputDecoration(
                 filled: true,
                 fillColor: cs.surfaceDim,
-                hintText: 'Descrivi o detta cosa hai mangiato...',
+                hintText: 'Descrivi gli alimenti (es. 80g pasta, 100g tonno)...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                 ),
@@ -342,11 +382,11 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
                       )
                     : IconButton(
                         icon: Icon(
-                          Symbols.auto_awesome_rounded,
+                          Symbols.arrow_forward_rounded,
                           color: cs.primary,
                         ),
                         onPressed: _runAiAnalysis,
-                        tooltip: 'Analizza con AI',
+                        tooltip: 'Analizza alimenti',
                       ),
               ),
             ),
@@ -644,7 +684,7 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
               );
             }),
 
-            // Conversational "Correggi con AI" Input Bar
+            // Conversational Refinement Input Bar
             const SizedBox(height: 4),
             TextField(
               controller: _refineCtrl,
@@ -652,14 +692,16 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
               decoration: InputDecoration(
                 filled: true,
                 fillColor: cs.surfaceDim,
-                hintText: '💬 Correggi con AI (es. "usa pasta integrale")...',
+                hintText: 'Modifica o aggiungi dettagli (es. "senza formaggio")...',
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 12,
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(999),
-                  borderSide: BorderSide(color: cs.primary),
+                  borderSide: BorderSide(
+                    color: cs.outlineVariant.withValues(alpha: 0.35),
+                  ),
                 ),
                 suffixIcon: IconButton(
                   icon: Icon(Symbols.send_rounded, color: cs.primary),
@@ -672,7 +714,7 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
             // Save CTA Button
             FilledButton.icon(
               style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(54),
+                minimumSize: const Size.fromHeight(52),
                 backgroundColor: _items.isEmpty && widget.existingMeal != null
                     ? cs.error
                     : null,
@@ -708,8 +750,8 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
               ),
               label: Text(
                 _items.isEmpty && widget.existingMeal != null
-                    ? 'Elimina Pasto'
-                    : 'Salva nella Timeline ($_loggedAtTime)',
+                    ? 'Elimina pasto'
+                    : 'Salva pasto ($_loggedAtTime)',
               ),
             ),
           ],

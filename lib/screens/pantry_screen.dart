@@ -212,7 +212,12 @@ class _PantryScreenState extends State<PantryScreen> {
                             const SizedBox(height: 4),
                             Text(
                               'Porzione: ${fav.defaultGrams.round()} g  •  ${fav.defaultKcal} kcal',
-                              style: tt.labelMedium?.copyWith(color: cs.primary),
+                              style: tt.labelMedium?.copyWith(
+                                color: cs.primary,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
                             ),
                             const SizedBox(height: 6),
                             Row(
@@ -221,6 +226,9 @@ class _PantryScreenState extends State<PantryScreen> {
                                   'P: ${p}g',
                                   style: tt.labelSmall?.copyWith(
                                     color: nutrients.protein,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
                                   ),
                                 ),
                                 const SizedBox(width: 10),
@@ -228,6 +236,9 @@ class _PantryScreenState extends State<PantryScreen> {
                                   'C: ${c}g',
                                   style: tt.labelSmall?.copyWith(
                                     color: nutrients.carbs,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
                                   ),
                                 ),
                                 const SizedBox(width: 10),
@@ -235,6 +246,9 @@ class _PantryScreenState extends State<PantryScreen> {
                                   'G: ${g}g',
                                   style: tt.labelSmall?.copyWith(
                                     color: nutrients.fat,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
                                   ),
                                 ),
                               ],

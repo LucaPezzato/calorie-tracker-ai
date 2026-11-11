@@ -43,6 +43,36 @@ Rispondi ESCLUSIVAMENTE con un oggetto JSON valido con questa struttura esatta:
 Non aggiungere markdown o testo fuori dal JSON.
 ''';
 
+  static const String _menuSystemPrompt = '''
+Sei un nutrizionista e dietista clinico esperto.
+Il tuo compito è analizzare i piatti di un menu di ristorante e consigliare all'utente le 3 scelte migliori per completare i suoi macro e calorie rimanenti per la giornata odierna.
+
+Rispondi ESCLUSIVAMENTE con un oggetto JSON valido con questa struttura esatta:
+{
+  "restaurant_name": "Nome del ristorante (o 'Ristorante')",
+  "summary_advice": "Breve strategia nutrizionale per questo pasto (es. 'Hai ancora 680 kcal e 45g di proteine: privilegia secondi magri e verdure')",
+  "recommendations": [
+    {
+      "dish_name": "Nome esatto del piatto",
+      "reasoning": "Spiegazione sintetica del perché è ideale rispetto a ciò che manca oggi (es. 'Apporta 38g di proteine colmando il tuo fabbisogno con pochi grassi')",
+      "estimated_grams": 250,
+      "estimated_kcal": 420,
+      "estimated_protein_g": 38.0,
+      "estimated_carbs_g": 12.0,
+      "estimated_fat_g": 14.0,
+      "estimated_fiber_g": 4.0,
+      "is_top_pick": true,
+      "caution_notes": "eventuale consiglio sui condimenti"
+    }
+  ],
+  "dishes_to_avoid": [
+    "Piatto sconsigliato 1 (troppo calorico o ricco di grassi saturi)",
+    "Piatto sconsigliato 2"
+  ]
+}
+Non aggiungere markdown o testo fuori dal JSON.
+''';
+
   /// Analyze a meal from text and/or photo using either Google Gemini or OpenAI
   Future<AiMealAnalysisResult> analyzeMeal({
     required AiProviderType provider,
@@ -215,6 +245,7 @@ Non aggiungere markdown o testo fuori dal JSON.
     required String modelName,
     required String apiKey,
     required String prompt,
+    String? customSystemPrompt,
     Uint8List? imageBytes,
   }) async {
     final cleanKey = SecureKeysService.sanitizeKey(apiKey);
@@ -226,8 +257,9 @@ Non aggiungere markdown o testo fuori dal JSON.
       'gemini-1.5-flash',
     }.toList();
 
+    final sys = customSystemPrompt ?? _systemPrompt;
     final parts = <Map<String, dynamic>>[
-      {'text': '$_systemPrompt\n\nRichiesta utente:\n$prompt'},
+      {'text': '$sys\n\nRichiesta utente:\n$prompt'},
     ];
     if (imageBytes != null) {
       parts.add({
@@ -304,6 +336,7 @@ Non aggiungere markdown o testo fuori dal JSON.
     required String modelName,
     required String apiKey,
     required String prompt,
+    String? customSystemPrompt,
     Uint8List? imageBytes,
   }) async {
     final cleanKey = SecureKeysService.sanitizeKey(apiKey);
@@ -329,7 +362,10 @@ Non aggiungere markdown o testo fuori dal JSON.
         'response_format': {'type': 'json_object'},
         'temperature': 0.2,
         'messages': [
-          {'role': 'system', 'content': _systemPrompt},
+          {
+            'role': 'system',
+            'content': customSystemPrompt ?? _systemPrompt,
+          },
           {'role': 'user', 'content': userContent},
         ],
       }),
@@ -343,6 +379,141 @@ Non aggiungere markdown o testo fuori dal JSON.
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final choices = decoded['choices'] as List<dynamic>;
     return (choices.first['message']['content'] as String?) ?? '{}';
+  }
+
+  /// Fetches clean text from a web URL (restaurant menu webpage, online menu)
+  Future<String> fetchWebText(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      final res = await http.get(uri, headers: {
+        'User-Agent':
+            'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Mobile Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,text/plain;q=0.9',
+      }).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        String body = res.body;
+        body = body
+            .replaceAll(
+              RegExp(r'<script[\s\S]*?</script>', caseSensitive: false),
+              '',
+            )
+            .replaceAll(
+              RegExp(r'<style[\s\S]*?</style>', caseSensitive: false),
+              '',
+            )
+            .replaceAll(RegExp(r'<[^>]*>'), ' ')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+        if (body.length > 9000) {
+          body = body.substring(0, 9000);
+        }
+        return body;
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  /// Analyze a restaurant menu (from Link, Text, or Photo) and recommend the best dishes
+  /// matching the user's remaining calories and macronutrient gaps today
+  Future<MenuAnalysisResult> analyzeMenuAndRecommend({
+    required AiProviderType provider,
+    required String modelName,
+    required String apiKey,
+    String? menuText,
+    String? menuUrl,
+    Uint8List? menuImageBytes,
+    required int remainingKcal,
+    required double remainingProteinG,
+    required double remainingCarbsG,
+    required double remainingFatG,
+  }) async {
+    String menuContent = menuText?.trim() ?? '';
+    if (menuUrl != null && menuUrl.trim().isNotEmpty) {
+      final webText = await fetchWebText(menuUrl.trim());
+      if (webText.isNotEmpty) {
+        menuContent =
+            'URL Menu: $menuUrl\nContenuto estratto dalla pagina:\n$webText\n\n$menuContent';
+      } else {
+        menuContent = 'URL Menu: $menuUrl\n$menuContent';
+      }
+    }
+
+    final promptBuffer = StringBuffer();
+    promptBuffer.writeln(
+      'BILANCIO NUTRIZIONALE RIMANENTE DI OGGI PER L\'UTENTE:',
+    );
+    promptBuffer.writeln('- Calorie rimanenti: $remainingKcal kcal');
+    promptBuffer.writeln('- Proteine mancanti: ${remainingProteinG.round()} g');
+    promptBuffer.writeln('- Carboidrati mancanti: ${remainingCarbsG.round()} g');
+    promptBuffer.writeln('- Grassi rimanenti: ${remainingFatG.round()} g');
+    promptBuffer.writeln('\nMENU DEL RISTORANTE DA ANALIZZARE:\n');
+    promptBuffer.writeln(
+      menuContent.isNotEmpty
+          ? menuContent
+          : 'Vedi immagine del menu allegata.',
+    );
+
+    final rawJson = switch (provider) {
+      AiProviderType.gemini => await _callGemini(
+          modelName: modelName,
+          apiKey: apiKey,
+          prompt: promptBuffer.toString(),
+          customSystemPrompt: _menuSystemPrompt,
+          imageBytes: menuImageBytes,
+        ),
+      AiProviderType.openai => await _callOpenAi(
+          modelName: modelName,
+          apiKey: apiKey,
+          prompt: promptBuffer.toString(),
+          customSystemPrompt: _menuSystemPrompt,
+          imageBytes: menuImageBytes,
+        ),
+    };
+
+    return _parseMenuResponse(rawJson);
+  }
+
+  MenuAnalysisResult _parseMenuResponse(String rawJson) {
+    String cleaned = rawJson
+        .replaceAll('```json', '')
+        .replaceAll('```', '')
+        .trim();
+    final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(cleaned);
+    if (jsonMatch != null) {
+      cleaned = jsonMatch.group(0)!;
+    }
+    final map = jsonDecode(cleaned) as Map<String, dynamic>;
+    final rawRecs = (map['recommendations'] as List<dynamic>? ?? []);
+    final recs = rawRecs.map((e) {
+      final m = e as Map<String, dynamic>;
+      return MenuDishRecommendation(
+        dishName: (m['dish_name'] ?? 'Piatto consigliato').toString(),
+        reasoning: (m['reasoning'] ?? '').toString(),
+        estimatedGrams: (m['estimated_grams'] as num?)?.toInt() ?? 250,
+        estimatedKcal: (m['estimated_kcal'] as num?)?.toInt() ?? 350,
+        estimatedProteinG:
+            (m['estimated_protein_g'] as num?)?.toDouble() ?? 30.0,
+        estimatedCarbsG: (m['estimated_carbs_g'] as num?)?.toDouble() ?? 20.0,
+        estimatedFatG: (m['estimated_fat_g'] as num?)?.toDouble() ?? 10.0,
+        estimatedFiberG: (m['estimated_fiber_g'] as num?)?.toDouble() ?? 0.0,
+        isTopPick: (m['is_top_pick'] as bool?) ?? false,
+        cautionNotes: m['caution_notes'] as String?,
+      );
+    }).toList();
+
+    final avoids = (map['dishes_to_avoid'] as List<dynamic>? ?? [])
+        .map((e) => e.toString())
+        .toList();
+
+    return MenuAnalysisResult(
+      restaurantName: (map['restaurant_name'] ?? 'Menu Ristorante').toString(),
+      summaryAdvice: (map['summary_advice'] ??
+              'Ecco le migliori opzioni per completare i tuoi macro di oggi.')
+          .toString(),
+      recommendations: recs,
+      dishesToAvoid: avoids,
+    );
   }
 
   AiMealAnalysisResult _parseStructuredResponse(

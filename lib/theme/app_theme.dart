@@ -3,12 +3,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'nutrient_colors.dart';
 
 class AppTheme {
-  /// Default Material You fallback seed color (Emerald / Mint)
-  static const Color defaultSeedColor = Color(0xFF34D399);
+  /// Default seed color (refined botanical sage / emerald)
+  static const Color defaultSeedColor = Color(0xFF10B981);
 
-  static const double radiusHero = 28.0;
-  static const double radiusCard = 20.0;
-  static const double radiusSmall = 16.0;
+  static const double radiusHero = 20.0;
+  static const double radiusCard = 16.0;
+  static const double radiusSmall = 10.0;
+  static const double radiusInner = 8.0;
 
   static ThemeData buildTheme({
     ColorScheme? dynamicScheme,
@@ -25,65 +26,64 @@ class AppTheme {
         ? ThemeData.dark().textTheme
         : ThemeData.light().textTheme;
 
-    // Triple-Font System:
-    // 1. Plus Jakarta Sans -> Display, Headline, Title, LabelLarge
-    // 2. Inter -> Body
-    // 3. JetBrains Mono -> Tabular numeric labels & badges
+    // Cohesive Modern Typography System based entirely on Inter (SF Pro / Linear aesthetic):
+    // Sleek, neutral, precision-engineered numerals with native tabular figures. Zero monospace code fonts.
     final textTheme = GoogleFonts.interTextTheme(baseTextTheme).copyWith(
-      displayLarge: GoogleFonts.plusJakartaSans(
+      displayLarge: GoogleFonts.inter(
         textStyle: baseTextTheme.displayLarge,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.8,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      ),
-      displayMedium: GoogleFonts.plusJakartaSans(
-        textStyle: baseTextTheme.displayMedium,
-        fontSize: 36,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         letterSpacing: -0.6,
         fontFeatures: const [FontFeature.tabularFigures()],
       ),
-      headlineSmall: GoogleFonts.plusJakartaSans(
+      displayMedium: GoogleFonts.inter(
+        textStyle: baseTextTheme.displayMedium,
+        fontSize: 34,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.5,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+      headlineSmall: GoogleFonts.inter(
         textStyle: baseTextTheme.headlineSmall,
-        fontSize: 22,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.4,
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.3,
       ),
-      titleLarge: GoogleFonts.plusJakartaSans(
+      titleLarge: GoogleFonts.inter(
         textStyle: baseTextTheme.titleLarge,
-        fontSize: 18,
-        fontWeight: FontWeight.w700,
+        fontSize: 17,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.2,
       ),
-      titleMedium: GoogleFonts.plusJakartaSans(
+      titleMedium: GoogleFonts.inter(
         textStyle: baseTextTheme.titleMedium,
-        fontSize: 15,
-        fontWeight: FontWeight.w700,
+        fontSize: 14.5,
+        fontWeight: FontWeight.w600,
       ),
       bodyLarge: GoogleFonts.inter(
         textStyle: baseTextTheme.bodyLarge,
-        fontSize: 15,
-        fontWeight: FontWeight.w500,
+        fontSize: 14.5,
+        fontWeight: FontWeight.w400,
       ),
       bodyMedium: GoogleFonts.inter(
         textStyle: baseTextTheme.bodyMedium,
-        fontSize: 13.5,
+        fontSize: 13,
         fontWeight: FontWeight.w400,
       ),
-      labelLarge: GoogleFonts.plusJakartaSans(
+      labelLarge: GoogleFonts.inter(
         textStyle: baseTextTheme.labelLarge,
-        fontSize: 14,
-        fontWeight: FontWeight.w800,
+        fontSize: 13.5,
+        fontWeight: FontWeight.w600,
       ),
-      labelMedium: GoogleFonts.jetBrainsMono(
+      labelMedium: GoogleFonts.inter(
         textStyle: baseTextTheme.labelMedium,
-        fontSize: 11.5,
-        fontWeight: FontWeight.w700,
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
         fontFeatures: const [FontFeature.tabularFigures()],
       ),
-      labelSmall: GoogleFonts.jetBrainsMono(
+      labelSmall: GoogleFonts.inter(
         textStyle: baseTextTheme.labelSmall,
-        fontSize: 10.5,
-        fontWeight: FontWeight.w600,
+        fontSize: 11,
+        fontWeight: FontWeight.w500,
         fontFeatures: const [FontFeature.tabularFigures()],
       ),
     );
@@ -104,7 +104,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusCard),
           side: BorderSide(
-            color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+            color: colorScheme.outlineVariant.withValues(alpha: 0.22),
             width: 1,
           ),
         ),
@@ -120,23 +120,23 @@ class AppTheme {
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: colorScheme.primary,
         foregroundColor: colorScheme.onPrimary,
-        elevation: 4,
+        elevation: 2,
         shape: const StadiumBorder(),
-        extendedTextStyle: GoogleFonts.plusJakartaSans(
-          fontSize: 14,
-          fontWeight: FontWeight.w800,
+        extendedTextStyle: GoogleFonts.inter(
+          fontSize: 13.5,
+          fontWeight: FontWeight.w600,
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: colorScheme.surfaceContainerLow,
         indicatorColor: colorScheme.primaryContainer,
-        height: 68,
+        height: 64,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final isSelected = states.contains(WidgetState.selected);
           return GoogleFonts.inter(
-            fontSize: 11.5,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
             color: isSelected
                 ? colorScheme.onSurface
                 : colorScheme.onSurfaceVariant,
@@ -144,11 +144,11 @@ class AppTheme {
         }),
       ),
       sliderTheme: SliderThemeData(
-        trackHeight: 10,
+        trackHeight: 8,
         activeTrackColor: colorScheme.primary,
         inactiveTrackColor: colorScheme.surfaceDim,
         thumbColor: colorScheme.onSurface,
-        overlayColor: colorScheme.primary.withValues(alpha: 0.16),
+        overlayColor: colorScheme.primary.withValues(alpha: 0.12),
         trackShape: const RoundedRectSliderTrackShape(),
       ),
     );

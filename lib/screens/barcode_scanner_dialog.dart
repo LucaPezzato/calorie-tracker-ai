@@ -435,7 +435,9 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
                   decoration: BoxDecoration(
                     color: cs.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(AppTheme.radiusCard),
-                    border: Border.all(color: cs.primary, width: 1.2),
+                    border: Border.all(
+                      color: cs.outlineVariant.withValues(alpha: 0.25),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -583,35 +585,45 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
                               '$currentKcal kcal',
                               style: tt.titleMedium?.copyWith(
                                 color: cs.primary,
-                                fontWeight: FontWeight.bold,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
                               ),
                             ),
                             Text(
                               'P: ${currentP.toStringAsFixed(1)}g',
                               style: tt.labelSmall?.copyWith(
                                 color: nutrients.protein,
-                                fontWeight: FontWeight.w600,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
                               ),
                             ),
                             Text(
                               'C: ${currentC.toStringAsFixed(1)}g',
                               style: tt.labelSmall?.copyWith(
                                 color: nutrients.carbs,
-                                fontWeight: FontWeight.w600,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
                               ),
                             ),
                             Text(
                               'G: ${currentG.toStringAsFixed(1)}g',
                               style: tt.labelSmall?.copyWith(
                                 color: nutrients.fat,
-                                fontWeight: FontWeight.w600,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
                               ),
                             ),
                             Text(
                               'F: ${currentF.toStringAsFixed(1)}g',
                               style: tt.labelSmall?.copyWith(
                                 color: nutrients.fiber,
-                                fontWeight: FontWeight.w600,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
                               ),
                             ),
                           ],
@@ -633,7 +645,7 @@ class _BarcodeScannerDialogState extends State<BarcodeScannerDialog> {
                         },
                         icon: const Icon(Symbols.check_rounded),
                         label: Text(
-                          'Aggiungi (${_grams.round()}g • $currentKcal kcal)',
+                          'Aggiungi al pasto (${_grams.round()}g • $currentKcal kcal)',
                         ),
                       ),
                     ],

@@ -27,6 +27,13 @@ class LocalDatabase {
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
+      onOpen: (db) async {
+        try {
+          await db.execute(
+            'ALTER TABLE daily_metrics ADD COLUMN coffee_cups INTEGER NOT NULL DEFAULT 0',
+          );
+        } catch (_) {}
+      },
       onCreate: _onCreate,
     );
     return _db!;
@@ -97,6 +104,7 @@ class LocalDatabase {
       CREATE TABLE daily_metrics (
         date TEXT PRIMARY KEY,
         water_ml INTEGER NOT NULL DEFAULT 0,
+        coffee_cups INTEGER NOT NULL DEFAULT 0,
         weight_kg REAL,
         updated_at TEXT NOT NULL
       )
@@ -407,7 +415,8 @@ class LocalDatabase {
     final r = rows.first;
     return DailyMetrics(
       date: date,
-      waterMl: r['water_ml'] as int,
+      waterMl: (r['water_ml'] as int?) ?? 0,
+      coffeeCups: (r['coffee_cups'] as int?) ?? 0,
       weightKg: (r['weight_kg'] as num?)?.toDouble(),
     );
   }
@@ -419,6 +428,7 @@ class LocalDatabase {
       {
         'date': metrics.date,
         'water_ml': metrics.waterMl,
+        'coffee_cups': metrics.coffeeCups,
         'weight_kg': metrics.weightKg,
         'updated_at': DateTime.now().toIso8601String(),
       },

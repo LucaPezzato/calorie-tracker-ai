@@ -2,9 +2,11 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:uuid/uuid.dart';
 import 'data/local_database.dart';
 import 'models/nutrition_models.dart';
 import 'screens/add_meal_bottom_sheet.dart';
+import 'screens/menu_advisor_dialog.dart';
 import 'screens/pantry_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/splash_screen.dart';
@@ -117,6 +119,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
         selectedDate: _todayDate,
         profile: _profile,
         existingMeal: existingMeal,
+        onOpenMenuAdvisor: _openMenuAdvisor,
         onDeleteMeal: existingMeal != null
             ? () => _deleteMeal(existingMeal)
             : null,
@@ -127,6 +130,58 @@ class _MainShellScreenState extends State<MainShellScreen> {
               ..sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
           });
           LocalDatabase.instance.saveMealEntry(entry);
+        },
+      ),
+    );
+  }
+
+  void _openMenuAdvisor() {
+    final consumedKcal = _meals.fold(0, (s, m) => s + m.totalKcal);
+    final consumedP = _meals.fold(0.0, (s, m) => s + m.totalProteinG);
+    final consumedC = _meals.fold(0.0, (s, m) => s + m.totalCarbsG);
+    final consumedG = _meals.fold(0.0, (s, m) => s + m.totalFatG);
+
+    final remainingKcal = (_profile.targetKcal - consumedKcal).clamp(0, 5000);
+    final remainingP = (_profile.targetProteinG - consumedP).clamp(0.0, 500.0);
+    final remainingC = (_profile.targetCarbsG - consumedC).clamp(0.0, 800.0);
+    final remainingG = (_profile.targetFatG - consumedG).clamp(0.0, 400.0);
+
+    showDialog<void>(
+      context: context,
+      builder: (_) => MenuAdvisorDialog(
+        profile: _profile,
+        remainingKcal: remainingKcal,
+        remainingProteinG: remainingP,
+        remainingCarbsG: remainingC,
+        remainingFatG: remainingG,
+        onSelectDish: (dish) {
+          final now = TimeOfDay.now();
+          final timeStr =
+              '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+          final mealId = const Uuid().v4();
+          final per100Multiplier = 100.0 / dish.estimatedGrams;
+          final entry = MealEntry(
+            id: mealId,
+            date: _todayDate,
+            loggedAt: timeStr,
+            title: dish.dishName,
+            notes: dish.reasoning,
+            items: [
+              MealItem(
+                id: const Uuid().v4(),
+                mealId: mealId,
+                name: dish.dishName,
+                grams: dish.estimatedGrams.toDouble(),
+                kcalPer100g: dish.estimatedKcal * per100Multiplier,
+                proteinPer100g: dish.estimatedProteinG * per100Multiplier,
+                carbsPer100g: dish.estimatedCarbsG * per100Multiplier,
+                fatPer100g: dish.estimatedFatG * per100Multiplier,
+                fiberPer100g: dish.estimatedFiberG * per100Multiplier,
+                source: MealItemSource.aiText,
+              ),
+            ],
+          );
+          _openMealSheet(existingMeal: entry);
         },
       ),
     );
@@ -185,8 +240,8 @@ class _MainShellScreenState extends State<MainShellScreen> {
           switch (_selectedIndex) {
             0 => 'Oggi',
             1 => 'Statistiche',
-            2 => 'Dispensa & Barcode',
-            _ => 'Profilo & Cloud',
+            2 => 'Dispensa',
+            _ => 'Profilo',
           },
           style: tt.headlineSmall,
         ),
@@ -194,24 +249,29 @@ class _MainShellScreenState extends State<MainShellScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: cs.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: nutrients.fiber),
+                border: Border.all(
+                  color: cs.outlineVariant.withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     Symbols.cloud_done_rounded,
-                    size: 15,
-                    fill: 1,
+                    size: 14,
                     color: nutrients.fiber,
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    'Drive OK',
-                    style: tt.labelSmall?.copyWith(color: nutrients.fiber),
+                    'Sincronizzato',
+                    style: tt.labelSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 10,
+                    ),
                   ),
                 ],
               ),
@@ -234,7 +294,16 @@ class _MainShellScreenState extends State<MainShellScreen> {
               });
               LocalDatabase.instance.upsertDailyMetrics(_metrics);
             },
+            onUpdateCoffee: (cups) {
+              setState(() {
+                _metrics = _metrics.copyWith(
+                  coffeeCups: cups.clamp(0, 30),
+                );
+              });
+              LocalDatabase.instance.upsertDailyMetrics(_metrics);
+            },
             onTapWeight: _openWeightDialog,
+            onOpenMenuAdvisor: _openMenuAdvisor,
             onDeleteMeal: _deleteMeal,
             onEditMeal: (meal) => _openMealSheet(existingMeal: meal),
           ),
@@ -266,7 +335,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
           ? FloatingActionButton.extended(
               onPressed: () => _openMealSheet(),
               icon: const Icon(Symbols.add_rounded),
-              label: const Text('Aggiungi Pasto'),
+              label: const Text('Aggiungi pasto'),
             )
           : null,
       bottomNavigationBar: NavigationBar(

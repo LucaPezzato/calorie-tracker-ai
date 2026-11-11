@@ -253,19 +253,70 @@ class MealEntry {
 class DailyMetrics {
   final String date; // YYYY-MM-DD
   final int waterMl;
+  final int coffeeCups;
   final double? weightKg;
 
   const DailyMetrics({
     required this.date,
     this.waterMl = 0,
+    this.coffeeCups = 0,
     this.weightKg,
   });
 
-  DailyMetrics copyWith({int? waterMl, double? weightKg}) => DailyMetrics(
+  /// Standard espresso has ~70 mg of caffeine. EFSA safe daily limit is ~400 mg.
+  int get caffeineMg => coffeeCups * 70;
+
+  DailyMetrics copyWith({
+    int? waterMl,
+    int? coffeeCups,
+    double? weightKg,
+  }) =>
+      DailyMetrics(
         date: date,
         waterMl: waterMl ?? this.waterMl,
+        coffeeCups: coffeeCups ?? this.coffeeCups,
         weightKg: weightKg ?? this.weightKg,
       );
+}
+
+class MenuDishRecommendation {
+  final String dishName;
+  final String reasoning;
+  final int estimatedGrams;
+  final int estimatedKcal;
+  final double estimatedProteinG;
+  final double estimatedCarbsG;
+  final double estimatedFatG;
+  final double estimatedFiberG;
+  final bool isTopPick;
+  final String? cautionNotes;
+
+  const MenuDishRecommendation({
+    required this.dishName,
+    required this.reasoning,
+    required this.estimatedGrams,
+    required this.estimatedKcal,
+    required this.estimatedProteinG,
+    required this.estimatedCarbsG,
+    required this.estimatedFatG,
+    this.estimatedFiberG = 0.0,
+    this.isTopPick = false,
+    this.cautionNotes,
+  });
+}
+
+class MenuAnalysisResult {
+  final String restaurantName;
+  final String summaryAdvice;
+  final List<MenuDishRecommendation> recommendations;
+  final List<String> dishesToAvoid;
+
+  const MenuAnalysisResult({
+    required this.restaurantName,
+    required this.summaryAdvice,
+    required this.recommendations,
+    this.dishesToAvoid = const [],
+  });
 }
 
 class FavoriteFood {

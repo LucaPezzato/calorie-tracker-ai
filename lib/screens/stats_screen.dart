@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../models/nutrition_models.dart';
 import '../theme/app_theme.dart';
 import '../theme/nutrient_colors.dart';
@@ -31,7 +32,7 @@ class _StatsScreenState extends State<StatsScreen> {
     'S',
     'D',
     'L',
-    'OGGI',
+    'Oggi',
   ];
 
   @override
@@ -184,44 +185,82 @@ class _StatsScreenState extends State<StatsScreen> {
                   children: [
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: cs.surfaceDim,
                           borderRadius: BorderRadius.circular(
                             AppTheme.radiusSmall,
                           ),
+                          border: Border.all(
+                            color: cs.outlineVariant.withValues(alpha: 0.25),
+                          ),
                         ),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            '🌱 Fibre: 27g / gg',
-                            style: tt.labelSmall?.copyWith(
+                        child: Row(
+                          children: [
+                            Icon(
+                              Symbols.eco_rounded,
+                              size: 15,
                               color: nutrients.fiber,
                             ),
-                          ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Fibre: 27g / giorno',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: tt.labelSmall?.copyWith(
+                                  color: nutrients.fiber,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: cs.surfaceDim,
                           borderRadius: BorderRadius.circular(
                             AppTheme.radiusSmall,
                           ),
+                          border: Border.all(
+                            color: cs.outlineVariant.withValues(alpha: 0.25),
+                          ),
                         ),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            '💧 Acqua: 2,4 L / gg',
-                            style: tt.labelSmall?.copyWith(
+                        child: Row(
+                          children: [
+                            Icon(
+                              Symbols.water_drop_rounded,
+                              size: 15,
                               color: nutrients.water,
                             ),
-                          ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Acqua: 2,4 L / giorno',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: tt.labelSmall?.copyWith(
+                                  color: nutrients.water,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),

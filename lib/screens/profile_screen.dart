@@ -411,12 +411,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       sw.stop();
       if (!mounted) return;
       setState(() {
-        _aiTestStatus = '✓ Connessione OK (${sw.elapsedMilliseconds} ms)';
+        _aiTestStatus = 'Connessione attiva (${sw.elapsedMilliseconds} ms)';
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Connessione AI verificata con successo in ${sw.elapsedMilliseconds} ms!',
+            'Connessione verificata con successo in ${sw.elapsedMilliseconds} ms',
           ),
         ),
       );
@@ -518,7 +518,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '✓ Backup su Google Drive completato con successo alle ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}!',
+            'Backup su Google Drive completato alle ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}',
           ),
         ),
       );
@@ -598,7 +598,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 5),
-          content: Text('✓ Database ripristinato con successo da Google Drive ($dateStr)!'),
+          content: Text('Database ripristinato da Google Drive ($dateStr)'),
         ),
       );
     } catch (e) {
@@ -670,7 +670,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 }
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('✓ Backup JSON copiato negli appunti!')),
+                    const SnackBar(content: Text('Backup JSON copiato negli appunti')),
                   );
                 }
               },
@@ -738,7 +738,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('✓ Database locale ripristinato con successo dal JSON!'),
+          content: Text('Database locale ripristinato con successo dal JSON'),
         ),
       );
     } catch (e) {
@@ -808,7 +808,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Text(
                             _lastKnownDriveBackup != null
                                 ? 'Ultimo backup: ${_lastKnownDriveBackup!.day}/${_lastKnownDriveBackup!.month} alle ${_lastKnownDriveBackup!.hour.toString().padLeft(2, '0')}:${_lastKnownDriveBackup!.minute.toString().padLeft(2, '0')}'
-                                : '☁️ Drive appDataFolder • 0€/mese',
+                                : 'Archiviazione privata Google Drive',
                             style: tt.labelSmall?.copyWith(
                               color: widget.driveService.currentUser != null
                                   ? nutrients.fiber
@@ -953,18 +953,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Motore AI Multi-Provider', style: tt.titleLarge),
+                Text('Riconoscimento pasti', style: tt.titleLarge),
                 const SizedBox(height: 10),
                 SegmentedButton<AiProviderType>(
                   showSelectedIcon: false,
                   segments: const [
                     ButtonSegment(
                       value: AiProviderType.gemini,
-                      label: Text('✨ Google Gemini'),
+                      label: Text('Gemini'),
+                      icon: Icon(Symbols.bolt_rounded, size: 16),
                     ),
                     ButtonSegment(
                       value: AiProviderType.openai,
-                      label: Text('🧠 OpenAI GPT'),
+                      label: Text('OpenAI'),
+                      icon: Icon(Symbols.smart_toy_rounded, size: 16),
                     ),
                   ],
                   selected: {_provider},
@@ -1010,7 +1012,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: cs.surfaceDim,
                       borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                       border: Border.all(
-                        color: cs.outlineVariant.withValues(alpha: 0.5),
+                        color: cs.outlineVariant.withValues(alpha: 0.25),
                       ),
                     ),
                     child: Row(
@@ -1034,9 +1036,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: _isTestingAi ? null : _testAiConnection,
-                    icon: const Icon(Symbols.bolt_rounded, size: 18),
+                    icon: const Icon(Symbols.check_circle_rounded, size: 18),
                     label: Text(
-                      _aiTestStatus ?? 'Testa Connessione AI',
+                      _aiTestStatus ?? 'Verifica connessione',
                     ),
                   ),
                 ),
@@ -1137,37 +1139,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           _TargetTile(
                             width: tileWidth,
-                            label: 'CALORIE',
+                            label: 'Calorie',
                             value: '${p.targetKcal} kcal',
                             color: cs.primary,
                           ),
                           _TargetTile(
                             width: tileWidth,
-                            label: 'PROTEINE',
+                            label: 'Proteine',
                             value: '${p.targetProteinG.round()} g',
                             color: nutrients.protein,
                           ),
                           _TargetTile(
                             width: tileWidth,
-                            label: 'CARBOIDRATI',
+                            label: 'Carboidrati',
                             value: '${p.targetCarbsG.round()} g',
                             color: nutrients.carbs,
                           ),
                           _TargetTile(
                             width: tileWidth,
-                            label: 'GRASSI',
+                            label: 'Grassi',
                             value: '${p.targetFatG.round()} g',
                             color: nutrients.fat,
                           ),
                           _TargetTile(
                             width: tileWidth,
-                            label: 'FIBRE',
+                            label: 'Fibre',
                             value: '${p.targetFiberG.round()} g',
                             color: nutrients.fiber,
                           ),
                           _TargetTile(
                             width: tileWidth,
-                            label: 'ACQUA',
+                            label: 'Acqua',
                             value: '${p.targetWaterMl} ml',
                             color: nutrients.water,
                           ),
@@ -1208,6 +1210,9 @@ class _TargetTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surfaceDim,
         borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.25),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1222,7 +1227,14 @@ class _TargetTile extends StatelessWidget {
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text(value, style: tt.titleMedium),
+            child: Text(
+              value,
+              style: tt.titleMedium?.copyWith(
+                fontFeatures: const [
+                  FontFeature.tabularFigures(),
+                ],
+              ),
+            ),
           ),
         ],
       ),

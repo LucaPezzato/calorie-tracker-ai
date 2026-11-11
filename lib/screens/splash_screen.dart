@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import '../theme/nutrient_colors.dart';
 
 class SplashScreen extends StatefulWidget {
   final Widget nextScreen;
@@ -56,7 +55,6 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final nutrients = context.nutrients;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F1512),
@@ -68,34 +66,27 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Expressive App Emblem
+                // Minimal App Emblem
                 Container(
-                  width: 136,
-                  height: 136,
+                  width: 120,
+                  height: 120,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: const Color(0xFF17221D),
                     border: Border.all(
-                      color: cs.primary.withValues(alpha: 0.45),
-                      width: 2.5,
+                      color: cs.outlineVariant.withValues(alpha: 0.35),
+                      width: 1.5,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: cs.primary.withValues(alpha: 0.22),
-                        blurRadius: 36,
-                        spreadRadius: 4,
-                      ),
-                    ],
                   ),
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       SizedBox(
-                        width: 108,
-                        height: 108,
+                        width: 96,
+                        height: 96,
                         child: CircularProgressIndicator(
-                          value: 0.78,
-                          strokeWidth: 8,
+                          value: 0.75,
+                          strokeWidth: 6,
                           strokeCap: StrokeCap.round,
                           backgroundColor: const Color(0xFF22332B),
                           color: cs.primary,
@@ -104,27 +95,17 @@ class _SplashScreenState extends State<SplashScreen>
                       Icon(
                         Symbols.local_fire_department_rounded,
                         fill: 1,
-                        size: 54,
+                        size: 46,
                         color: cs.primary,
-                      ),
-                      Positioned(
-                        top: 24,
-                        right: 24,
-                        child: Icon(
-                          Symbols.auto_awesome_rounded,
-                          fill: 1,
-                          size: 20,
-                          color: nutrients.carbs,
-                        ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'Calorie Tracker AI',
+                  'Calorie Tracker',
                   style: tt.headlineSmall?.copyWith(
-                    fontSize: 26,
+                    fontSize: 24,
                     color: const Color(0xFFE4F2EB),
                   ),
                 ),
@@ -132,18 +113,20 @@ class _SplashScreenState extends State<SplashScreen>
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
-                    vertical: 6,
+                    vertical: 5,
                   ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF17221D),
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
-                      color: cs.primary.withValues(alpha: 0.35),
+                      color: cs.outlineVariant.withValues(alpha: 0.25),
                     ),
                   ),
                   child: Text(
-                    'SQLite Offline  •  Google Drive  •  Multi-AI',
-                    style: tt.labelSmall?.copyWith(color: cs.primary),
+                    'Diario nutrizionale personale',
+                    style: tt.labelSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ],
