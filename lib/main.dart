@@ -1,6 +1,7 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:uuid/uuid.dart';
 import 'data/local_database.dart';
@@ -14,11 +15,13 @@ import 'screens/stats_screen.dart';
 import 'screens/today_screen.dart';
 import 'services/drive_backup_service.dart';
 import 'services/firebase_backup_service.dart';
+import 'services/widget_sync_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/nutrient_colors.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await WidgetSyncService.initialize();
   runApp(const ProviderScope(child: CalorieTrackerAiApp()));
 }
 
@@ -55,7 +58,7 @@ class MainShellScreen extends StatefulWidget {
   State<MainShellScreen> createState() => _MainShellScreenState();
 }
 
-class _MainShellScreenState extends State<MainShellScreen> {
+class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingObserver {
   final DriveBackupService _driveService = DriveBackupService();
   final FirebaseBackupService _firebaseService = FirebaseBackupService();
   int _selectedIndex = 0;
@@ -74,10 +77,28 @@ class _MainShellScreenState extends State<MainShellScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    HomeWidget.initiallyLaunchedFromHomeWidget().then((uri) {
+      if (uri != null && mounted) {
+        setState(() => _selectedIndex = 0);
+        _loadFromDatabase();
+      }
+    });
+    HomeWidget.widgetClicked.listen((uri) {
+      if (uri != null && mounted) {
+        setState(() => _selectedIndex = 0);
+        _loadFromDatabase();
+      }
+    });
     _firebaseService.initialize().then((_) {
       if (mounted) setState(() {});
     });
     LocalDatabase.instance.onDataMutated = () {
+      WidgetSyncService.syncTodayData(
+        profile: _profile,
+        metrics: _metrics,
+        meals: _meals,
+      );
       if (_profile.autoBackupEnabled) {
         if (_firebaseService.currentUser != null) {
           _firebaseService.scheduleAutoBackup();
@@ -87,6 +108,19 @@ class _MainShellScreenState extends State<MainShellScreen> {
       }
     };
     _loadFromDatabase();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadFromDatabase();
+    }
   }
 
   Future<void> _loadFromDatabase() async {
@@ -102,6 +136,11 @@ class _MainShellScreenState extends State<MainShellScreen> {
       _previousWeightKg = prevWeight;
       _dataVersion++;
     });
+    WidgetSyncService.syncTodayData(
+      profile: profile,
+      metrics: metrics,
+      meals: meals,
+    );
   }
 
   Future<void> _deleteMeal(MealEntry meal) async {

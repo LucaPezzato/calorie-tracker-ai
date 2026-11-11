@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="12dp">
+
+    <!-- Top Bar: Title & Coffee Pill -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Calorie Tracker AI"
+            android:textColor="#bd93f9"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_coffee_pill"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/widget_pill_bg"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="2dp"
+            android:text="☕ 0"
+            android:textColor="#ffb86c"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Center Card: Calories & Macros -->
+    <LinearLayout
+        android:id="@+id/widget_clickable_body"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:paddingVertical="4dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="bottom">
+
+            <TextView
+                android:id="@+id/widget_kcal_remaining"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="2.906"
+                android:textColor="#f8f8f2"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_kcal_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_marginBottom="3dp"
+                android:text="kcal rimanenti"
+                android:textColor="#8be9fd"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_macros_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="P: 0g  •  C: 0g  •  G: 0g"
+            android:textColor="#a0a4b8"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Water Header -->
+    <TextView
+        android:id="@+id/widget_water_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="💧 Acqua: 0 / 2.500 ml"
+        android:textColor="#8be9fd"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="6dp" />
+
+    <!-- Quick Action Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <Button
+            android:id="@+id/btn_water_sub"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/widget_button_bg"
+            android:text="-250"
+            android:textColor="#f8f8f2"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:padding="0dp" />
+
+        <Button
+            android:id="@+id/btn_water_add"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/widget_button_accent_bg"
+            android:text="+250"
+            android:textColor="#ffffff"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:padding="0dp" />
+
+        <Button
+            android:id="@+id/btn_water_add500"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/widget_button_accent_bg"
+            android:text="+500"
+            android:textColor="#ffffff"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:padding="0dp" />
+
+        <Button
+            android:id="@+id/btn_coffee_add"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/widget_button_bg"
+            android:text="+1 ☕"
+            android:textColor="#ffb86c"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:padding="0dp" />
+    </LinearLayout>
+
+</LinearLayout>

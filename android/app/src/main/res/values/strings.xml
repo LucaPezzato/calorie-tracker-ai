@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Calorie Tracker AI</string>
+    <string name="widget_calorie_water_description">Panoramica giornaliera calorie rimanenti, macro e pulsanti rapidi per tracciare acqua e caffè.</string>
+    <string name="widget_hydration_compact_description">Tracciatore rapido compatto per aggiungere o togliere acqua e caffè con un tocco.</string>
+</resources>
