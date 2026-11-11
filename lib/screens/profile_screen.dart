@@ -6,6 +6,7 @@ import '../data/local_database.dart';
 import '../models/nutrition_models.dart';
 import '../services/ai_nutrition_service.dart';
 import '../services/drive_backup_service.dart';
+import '../services/firebase_backup_service.dart';
 import '../services/secure_keys_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/nutrient_colors.dart';
@@ -13,6 +14,7 @@ import '../theme/nutrient_colors.dart';
 class ProfileScreen extends StatefulWidget {
   final UserProfile profile;
   final DriveBackupService driveService;
+  final FirebaseBackupService firebaseService;
   final ValueChanged<UserProfile> onProfileChanged;
   final VoidCallback? onDatabaseRestored;
 
@@ -20,6 +22,7 @@ class ProfileScreen extends StatefulWidget {
     super.key,
     required this.profile,
     required this.driveService,
+    required this.firebaseService,
     required this.onProfileChanged,
     this.onDatabaseRestored,
   });
@@ -56,6 +59,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _checkDriveBackupMetadata() async {
+    if (widget.firebaseService.currentUser != null) {
+      final fbDate = await widget.firebaseService.getLatestBackupDate();
+      if (fbDate != null && mounted) {
+        setState(() => _lastKnownDriveBackup = fbDate);
+        return;
+      }
+    }
     final info = await widget.driveService.getLatestBackupInfo();
     if (info != null && mounted) {
       setState(() => _lastKnownDriveBackup = info.modifiedTime);
@@ -643,6 +653,209 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _handleCloudSignInDialog() async {
+    final fbUser = widget.firebaseService.currentUser;
+    final driveUser = widget.driveService.currentUser;
+
+    if (fbUser != null || driveUser != null) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Disconnetti Cloud'),
+          content: Text(
+            'Attualmente connesso come:\n${fbUser?.email ?? (fbUser != null ? "Utente Anonimo Firebase" : driveUser?.email)}\n\nVuoi disconnetterti?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Disconnetti'),
+            ),
+          ],
+        ),
+      );
+      if (confirm == true) {
+        await widget.firebaseService.signOut();
+        await widget.driveService.signOut();
+        if (mounted) setState(() {});
+      }
+      return;
+    }
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 8, 18, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Collega Backup Cloud',
+                style: Theme.of(ctx).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Scegli come salvare i tuoi backup remoti in modo sicuro:',
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 14),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: Theme.of(ctx).colorScheme.primaryContainer,
+                  child: const Icon(Symbols.account_circle_rounded),
+                ),
+                title: const Text('Accedi con Google (Firebase)'),
+                subtitle: const Text('Consigliato. Permessi base profilo, zero verifiche o moduli.'),
+                onTap: () => Navigator.pop(ctx, 'fb_google'),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: Theme.of(ctx).colorScheme.secondaryContainer,
+                  child: const Icon(Symbols.key_rounded),
+                ),
+                title: const Text('Accesso Anonimo / 1-Tap (Firebase)'),
+                subtitle: const Text('Backup immediato senza inserire alcuna email.'),
+                onTap: () => Navigator.pop(ctx, 'fb_anon'),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+                  child: const Icon(Symbols.add_to_drive_rounded),
+                ),
+                title: const Text('Google Drive Personale'),
+                subtitle: const Text('Salvataggio nella cartella nascosta appDataFolder di Drive.'),
+                onTap: () => Navigator.pop(ctx, 'drive'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (choice == 'fb_google') {
+      try {
+        final u = await widget.firebaseService.signInWithGoogle();
+        if (mounted) setState(() {});
+        if (u != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Connesso a Firebase come ${u.email}')),
+          );
+        }
+      } catch (e) {
+        if (!mounted) return;
+        final msg = e.toString().replaceFirst('Exception: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(duration: const Duration(seconds: 5), content: Text(msg)),
+        );
+      }
+    } else if (choice == 'fb_anon') {
+      try {
+        final u = await widget.firebaseService.signInAnonymously();
+        if (mounted) setState(() {});
+        if (u != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Accesso anonimo Firebase completato con successo!')),
+          );
+        }
+      } catch (e) {
+        if (!mounted) return;
+        final msg = e.toString().replaceFirst('Exception: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(duration: const Duration(seconds: 5), content: Text(msg)),
+        );
+      }
+    } else if (choice == 'drive') {
+      await _handleGoogleSignIn();
+    }
+  }
+
+  Future<void> _handleUnifiedBackup() async {
+    if (widget.firebaseService.currentUser != null) {
+      setState(() => _isBackingUp = true);
+      try {
+        final ok = await widget.firebaseService.uploadBackup();
+        if (!mounted) return;
+        if (ok) {
+          final now = DateTime.now();
+          setState(() => _lastKnownDriveBackup = now);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Backup Firebase salvato alle ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}',
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Errore durante il caricamento del backup su Firebase.')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isBackingUp = false);
+      }
+    } else if (widget.driveService.currentUser != null) {
+      await _handleDriveBackup();
+    } else {
+      await _handleCloudSignInDialog();
+    }
+  }
+
+  Future<void> _handleUnifiedRestore() async {
+    if (widget.firebaseService.currentUser != null) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Ripristina da Firebase'),
+          content: const Text(
+            'Attenzione: tutti i pasti e i dati attuali sul telefono verranno sovrascritti con l\'ultimo backup presente nel tuo spazio cloud Firebase.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Ripristina ora'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+
+      setState(() => _isRestoring = true);
+      try {
+        final ok = await widget.firebaseService.restoreBackup();
+        if (!mounted) return;
+        if (ok) {
+          widget.onDatabaseRestored?.call();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Database ripristinato con successo da Firebase!')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Nessun backup trovato o errore durante il download.')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isRestoring = false);
+      }
+    } else if (widget.driveService.currentUser != null) {
+      await _handleDriveRestore();
+    } else {
+      await _handleCloudSignInDialog();
+    }
+  }
+
   Future<void> _handleExportLocalBackup() async {
     try {
       final jsonMap = await LocalDatabase.instance.exportDatabaseAsJson();
@@ -806,62 +1019,84 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: widget.driveService.currentUser != null
-                          ? nutrients.fiber
-                          : cs.surfaceContainerHighest,
-                      foregroundColor: widget.driveService.currentUser != null
-                          ? Colors.black
-                          : cs.onSurface,
-                      child: Icon(
-                        widget.driveService.currentUser != null
-                            ? Symbols.cloud_done_rounded
-                            : Symbols.cloud_off_rounded,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.driveService.currentUser?.email ??
-                                'Google Drive non collegato',
-                            style: tt.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                Builder(
+                  builder: (context) {
+                    final fbUser = widget.firebaseService.currentUser;
+                    final driveUser = widget.driveService.currentUser;
+                    final isConnected = fbUser != null || driveUser != null;
+                    final String title;
+                    final String subtitle;
+
+                    if (fbUser != null) {
+                      title = fbUser.isAnonymous
+                          ? 'Utente Anonimo (Firebase Cloud)'
+                          : (fbUser.email ?? 'Firebase Cloud');
+                      subtitle = _lastKnownDriveBackup != null
+                          ? 'Ultimo backup: ${_lastKnownDriveBackup!.day}/${_lastKnownDriveBackup!.month} alle ${_lastKnownDriveBackup!.hour.toString().padLeft(2, '0')}:${_lastKnownDriveBackup!.minute.toString().padLeft(2, '0')}'
+                          : 'Spazio privato Cloud Firestore';
+                    } else if (driveUser != null) {
+                      title = driveUser.email;
+                      subtitle = _lastKnownDriveBackup != null
+                          ? 'Ultimo backup: ${_lastKnownDriveBackup!.day}/${_lastKnownDriveBackup!.month} alle ${_lastKnownDriveBackup!.hour.toString().padLeft(2, '0')}:${_lastKnownDriveBackup!.minute.toString().padLeft(2, '0')}'
+                          : 'Google Drive appDataFolder';
+                    } else {
+                      title = 'Cloud Backup non collegato';
+                      subtitle = 'Firebase Firestore (Gratuito) o Google Drive';
+                    }
+
+                    return Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: isConnected
+                              ? nutrients.fiber
+                              : cs.surfaceContainerHighest,
+                          foregroundColor: isConnected
+                              ? Colors.black
+                              : cs.onSurface,
+                          child: Icon(
+                            isConnected
+                                ? Symbols.cloud_done_rounded
+                                : Symbols.cloud_off_rounded,
+                            size: 20,
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _lastKnownDriveBackup != null
-                                ? 'Ultimo backup: ${_lastKnownDriveBackup!.day}/${_lastKnownDriveBackup!.month} alle ${_lastKnownDriveBackup!.hour.toString().padLeft(2, '0')}:${_lastKnownDriveBackup!.minute.toString().padLeft(2, '0')}'
-                                : 'Archiviazione privata Google Drive',
-                            style: tt.labelSmall?.copyWith(
-                              color: widget.driveService.currentUser != null
-                                  ? nutrients.fiber
-                                  : cs.onSurfaceVariant,
-                            ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: tt.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                subtitle,
+                                style: tt.labelSmall?.copyWith(
+                                  color: isConnected
+                                      ? nutrients.fiber
+                                      : cs.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                      ),
-                      onPressed: _handleGoogleSignIn,
-                      child: Text(
-                        widget.driveService.currentUser != null
-                            ? 'Cambia'
-                            : 'Accedi',
-                      ),
-                    ),
-                  ],
+                        ),
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                          ),
+                          onPressed: _handleCloudSignInDialog,
+                          child: Text(
+                            isConnected ? 'Cambia' : 'Accedi',
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 8),
                 SwitchListTile(
@@ -889,7 +1124,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: FilledButton.icon(
                         onPressed: _isBackingUp || _isRestoring
                             ? null
-                            : _handleDriveBackup,
+                            : _handleUnifiedBackup,
                         icon: _isBackingUp
                             ? const SizedBox(
                                 width: 16,
@@ -905,7 +1140,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: OutlinedButton.icon(
                         onPressed: _isBackingUp || _isRestoring
                             ? null
-                            : _handleDriveRestore,
+                            : _handleUnifiedRestore,
                         icon: _isRestoring
                             ? const SizedBox(
                                 width: 16,

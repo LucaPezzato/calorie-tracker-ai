@@ -13,6 +13,7 @@ import 'screens/splash_screen.dart';
 import 'screens/stats_screen.dart';
 import 'screens/today_screen.dart';
 import 'services/drive_backup_service.dart';
+import 'services/firebase_backup_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/nutrient_colors.dart';
 
@@ -56,6 +57,7 @@ class MainShellScreen extends StatefulWidget {
 
 class _MainShellScreenState extends State<MainShellScreen> {
   final DriveBackupService _driveService = DriveBackupService();
+  final FirebaseBackupService _firebaseService = FirebaseBackupService();
   int _selectedIndex = 0;
   final String _todayDate = DateTime.now().toIso8601String().split('T').first;
 
@@ -71,9 +73,16 @@ class _MainShellScreenState extends State<MainShellScreen> {
   @override
   void initState() {
     super.initState();
+    _firebaseService.initialize().then((_) {
+      if (mounted) setState(() {});
+    });
     LocalDatabase.instance.onDataMutated = () {
       if (_profile.autoBackupEnabled) {
-        _driveService.scheduleAutoBackup();
+        if (_firebaseService.currentUser != null) {
+          _firebaseService.scheduleAutoBackup();
+        } else if (_driveService.currentUser != null) {
+          _driveService.scheduleAutoBackup();
+        }
       }
     };
     _loadFromDatabase();
@@ -325,6 +334,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
           ProfileScreen(
             profile: _profile,
             driveService: _driveService,
+            firebaseService: _firebaseService,
             onProfileChanged: (updated) {
               setState(() => _profile = updated);
               LocalDatabase.instance.saveUserProfile(updated);

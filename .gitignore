@@ -44,6 +44,10 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Firebase credentials (keep local, do not commit)
+android/app/google-services.json
+lib/firebase_options_local.dart
+
 # Widget Preview related
 .widget_preview/
 *.apk
