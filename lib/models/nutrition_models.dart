@@ -348,3 +348,27 @@ class FavoriteFood {
 
   int get defaultKcal => ((defaultGrams / 100.0) * kcalPer100g).round();
 }
+
+class DailyStatEntry {
+  final String date;
+  final double kcal;
+  final double protein;
+  final double carbs;
+  final double fat;
+  final double fiber;
+  final int waterMl;
+  final int coffeeCups;
+  final double? weightKg;
+
+  const DailyStatEntry({
+    required this.date,
+    this.kcal = 0,
+    this.protein = 0,
+    this.carbs = 0,
+    this.fat = 0,
+    this.fiber = 0,
+    this.waterMl = 0,
+    this.coffeeCups = 0,
+    this.weightKg,
+  });
+}

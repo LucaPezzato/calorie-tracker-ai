@@ -69,6 +69,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
   );
   List<MealEntry> _meals = [];
   double? _previousWeightKg;
+  int _dataVersion = 0;
 
   @override
   void initState() {
@@ -99,6 +100,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
       _metrics = metrics;
       _profile = profile;
       _previousWeightKg = prevWeight;
+      _dataVersion++;
     });
   }
 
@@ -320,7 +322,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
             onDeleteMeal: _deleteMeal,
             onEditMeal: (meal) => _openMealSheet(existingMeal: meal),
           ),
-          StatsScreen(profile: _profile),
+          StatsScreen(key: ValueKey(_dataVersion), profile: _profile),
           PantryScreen(
             onQuickAddMeal: (entry) {
               setState(() {

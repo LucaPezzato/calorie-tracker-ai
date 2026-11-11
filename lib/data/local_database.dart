@@ -454,6 +454,89 @@ class LocalDatabase {
     onDataMutated?.call();
   }
 
+  Future<bool> hasAnyLoggedData() async {
+    final db = await database;
+    final mealsCount = Sqflite.firstIntValue(
+      await db.rawQuery('SELECT COUNT(*) FROM meal_entries'),
+    ) ?? 0;
+    if (mealsCount > 0) return true;
+    final metricsCount = Sqflite.firstIntValue(
+      await db.rawQuery(
+        'SELECT COUNT(*) FROM daily_metrics WHERE water_ml > 0 OR coffee_cups > 0 OR weight_kg IS NOT NULL',
+      ),
+    ) ?? 0;
+    return metricsCount > 0;
+  }
+
+  Future<List<DailyStatEntry>> getHistoricalStats(int days) async {
+    final db = await database;
+    final now = DateTime.now();
+    final startDate = now.subtract(Duration(days: days - 1));
+    final startDateStr = startDate.toIso8601String().split('T').first;
+
+    final mealRows = await db.rawQuery('''
+      SELECT 
+        e.date as date,
+        SUM(i.grams * i.kcal_per_100g / 100.0) as total_kcal,
+        SUM(i.grams * i.protein_per_100g / 100.0) as total_protein,
+        SUM(i.grams * i.carbs_per_100g / 100.0) as total_carbs,
+        SUM(i.grams * i.fat_per_100g / 100.0) as total_fat,
+        SUM(i.grams * i.fiber_per_100g / 100.0) as total_fiber
+      FROM meal_entries e
+      JOIN meal_items i ON e.id = i.meal_id
+      WHERE e.date >= ?
+      GROUP BY e.date
+    ''', [startDateStr]);
+
+    final mealDataByDate = <String, Map<String, double>>{};
+    for (final r in mealRows) {
+      final d = r['date'] as String;
+      mealDataByDate[d] = {
+        'kcal': ((r['total_kcal'] as num?) ?? 0).toDouble(),
+        'protein': ((r['total_protein'] as num?) ?? 0).toDouble(),
+        'carbs': ((r['total_carbs'] as num?) ?? 0).toDouble(),
+        'fat': ((r['total_fat'] as num?) ?? 0).toDouble(),
+        'fiber': ((r['total_fiber'] as num?) ?? 0).toDouble(),
+      };
+    }
+
+    final metricRows = await db.query(
+      'daily_metrics',
+      where: 'date >= ?',
+      whereArgs: [startDateStr],
+    );
+    final metricDataByDate = <String, Map<String, dynamic>>{};
+    for (final r in metricRows) {
+      final d = r['date'] as String;
+      metricDataByDate[d] = {
+        'water': (r['water_ml'] as num?)?.toInt() ?? 0,
+        'coffee': (r['coffee_cups'] as num?)?.toInt() ?? 0,
+        'weight': (r['weight_kg'] as num?)?.toDouble(),
+      };
+    }
+
+    final list = <DailyStatEntry>[];
+    for (int i = 0; i < days; i++) {
+      final day = startDate.add(Duration(days: i));
+      final dateStr = day.toIso8601String().split('T').first;
+      final m = mealDataByDate[dateStr];
+      final met = metricDataByDate[dateStr];
+
+      list.add(DailyStatEntry(
+        date: dateStr,
+        kcal: m?['kcal'] ?? 0.0,
+        protein: m?['protein'] ?? 0.0,
+        carbs: m?['carbs'] ?? 0.0,
+        fat: m?['fat'] ?? 0.0,
+        fiber: m?['fiber'] ?? 0.0,
+        waterMl: met?['water'] ?? 0,
+        coffeeCups: met?['coffee'] ?? 0,
+        weightKg: met?['weight'],
+      ));
+    }
+    return list;
+  }
+
   /// Flushes SQLite WAL to the main .sqlite file before uploading to Google Drive
   Future<File> prepareDatabaseFileForBackup() async {
     final db = await database;
