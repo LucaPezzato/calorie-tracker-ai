@@ -556,4 +556,98 @@ Non aggiungere markdown o testo fuori dal JSON.
       items: items,
     );
   }
+
+  /// Generates an end-of-day AI nutritional summary & coaching report
+  Future<DailyAiSummary> generateDailySummary({
+    required AiProviderType provider,
+    required String modelName,
+    required String apiKey,
+    required String date,
+    required UserProfile profile,
+    required List<MealEntry> meals,
+    required DailyMetrics metrics,
+  }) async {
+    final totalKcal = meals.fold(0, (s, m) => s + m.totalKcal);
+    final totalP = meals.fold(0.0, (s, m) => s + m.totalProteinG).round();
+    final totalC = meals.fold(0.0, (s, m) => s + m.totalCarbsG).round();
+    final totalG = meals.fold(0.0, (s, m) => s + m.totalFatG).round();
+    final totalFiber = meals.fold(0.0, (s, m) => s + m.totalFiberG).round();
+
+    final mealsSummary = meals.isEmpty
+        ? 'Nessun pasto registrato.'
+        : meals
+            .map((m) =>
+                '- ${m.loggedAt} ${m.title}: ${m.totalKcal} kcal (P:${m.totalProteinG.round()}g C:${m.totalCarbsG.round()}g G:${m.totalFatG.round()}g)')
+            .join('\n');
+
+    const customSys = '''
+Sei un nutrizionista sportivo AI. Analizza la giornata alimentare dell'utente in italiano in modo costruttivo, preciso e conciso.
+Rispondi ESCLUSIVAMENTE con un JSON valido con questo schema esatto:
+{
+  "score": 8.5,
+  "headline": "Titolo breve (max 60 caratteri)",
+  "verdict": "Riassunto di 1-2 frasi sul bilancio calorico e macro della giornata.",
+  "strengths": ["Punto di forza 1", "Punto di forza 2"],
+  "warnings": ["Eventuale criticità o carenza 1"],
+  "advice_tomorrow": "Un consiglio pratico e concreto per domani."
+}
+''';
+
+    final prompt = '''
+Data: $date
+Obiettivo utente: ${profile.goalType.name}
+Target giornaliero: ${profile.targetKcal} kcal | P: ${profile.targetProteinG.round()}g | C: ${profile.targetCarbsG.round()}g | G: ${profile.targetFatG.round()}g | Fibre: ${profile.targetFiberG.round()}g | Acqua: ${profile.targetWaterMl} ml
+
+Consumo effettivo di oggi:
+- Calorie totali: $totalKcal kcal
+- Proteine: ${totalP}g | Carboidrati: ${totalC}g | Grassi: ${totalG}g | Fibre: ${totalFiber}g
+- Acqua bevuta: ${metrics.waterMl} ml
+- Caffè: ${metrics.coffeeCups} tazzine
+${metrics.weightKg != null ? '- Peso registrato: ${metrics.weightKg!.toStringAsFixed(1)} kg' : ''}
+
+Pasti registrati:
+$mealsSummary
+''';
+
+    final rawJson = switch (provider) {
+      AiProviderType.gemini => await _callGemini(
+          modelName: modelName,
+          apiKey: apiKey,
+          prompt: prompt,
+          customSystemPrompt: customSys,
+        ),
+      AiProviderType.openai => await _callOpenAi(
+          modelName: modelName,
+          apiKey: apiKey,
+          prompt: prompt,
+          customSystemPrompt: customSys,
+        ),
+    };
+
+    String cleaned = rawJson
+        .replaceAll('```json', '')
+        .replaceAll('```', '')
+        .trim();
+    final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(cleaned);
+    if (jsonMatch != null) {
+      cleaned = jsonMatch.group(0)!;
+    }
+    final map = jsonDecode(cleaned) as Map<String, dynamic>;
+
+    List<String> toStrList(dynamic v) {
+      if (v is List) return v.map((e) => e.toString()).toList();
+      return const [];
+    }
+
+    return DailyAiSummary(
+      date: date,
+      score: ((map['score'] as num?) ?? 7.5).toDouble().clamp(1.0, 10.0),
+      headline: (map['headline'] ?? 'Resoconto giornata').toString(),
+      verdict: (map['verdict'] ?? '').toString(),
+      strengths: toStrList(map['strengths']),
+      warnings: toStrList(map['warnings']),
+      adviceTomorrow: (map['advice_tomorrow'] ?? '').toString(),
+      createdAt: DateTime.now().toIso8601String(),
+    );
+  }
 }

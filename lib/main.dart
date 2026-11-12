@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import 'data/local_database.dart';
 import 'models/nutrition_models.dart';
 import 'screens/add_meal_bottom_sheet.dart';
+import 'screens/daily_ai_summary_sheet.dart';
 import 'screens/menu_advisor_dialog.dart';
 import 'screens/pantry_screen.dart';
 import 'screens/profile_screen.dart';
@@ -358,6 +359,13 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
             },
             onTapWeight: _openWeightDialog,
             onOpenMenuAdvisor: _openMenuAdvisor,
+            onOpenDailySummary: () => DailyAiSummarySheet.show(
+              context,
+              date: _todayDate,
+              profile: _profile,
+              meals: _meals,
+              metrics: _metrics,
+            ),
             onDeleteMeal: _deleteMeal,
             onEditMeal: (meal) => _openMealSheet(existingMeal: meal),
           ),

@@ -33,6 +33,18 @@ class LocalDatabase {
             'ALTER TABLE daily_metrics ADD COLUMN coffee_cups INTEGER NOT NULL DEFAULT 0',
           );
         } catch (_) {}
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS daily_ai_summaries (
+            date TEXT PRIMARY KEY,
+            score REAL NOT NULL,
+            headline TEXT NOT NULL,
+            verdict TEXT NOT NULL,
+            strengths_json TEXT NOT NULL,
+            warnings_json TEXT NOT NULL,
+            advice_tomorrow TEXT NOT NULL,
+            created_at TEXT NOT NULL
+          )
+        ''');
       },
       onCreate: _onCreate,
     );
@@ -122,6 +134,19 @@ class LocalDatabase {
         fiber_per_100g REAL NOT NULL DEFAULT 0,
         barcode TEXT,
         use_count INTEGER NOT NULL DEFAULT 1
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE daily_ai_summaries (
+        date TEXT PRIMARY KEY,
+        score REAL NOT NULL,
+        headline TEXT NOT NULL,
+        verdict TEXT NOT NULL,
+        strengths_json TEXT NOT NULL,
+        warnings_json TEXT NOT NULL,
+        advice_tomorrow TEXT NOT NULL,
+        created_at TEXT NOT NULL
       )
     ''');
 
@@ -537,6 +562,106 @@ class LocalDatabase {
     return list;
   }
 
+  /// Fetch stats mapped by YYYY-MM-DD for a specific month (1..12)
+  Future<Map<String, DailyStatEntry>> getMonthStats(int year, int month) async {
+    final db = await database;
+    final prefix = '$year-${month.toString().padLeft(2, '0')}-';
+
+    final mealRows = await db.rawQuery('''
+      SELECT 
+        e.date as date,
+        SUM(i.grams * i.kcal_per_100g / 100.0) as total_kcal,
+        SUM(i.grams * i.protein_per_100g / 100.0) as total_protein,
+        SUM(i.grams * i.carbs_per_100g / 100.0) as total_carbs,
+        SUM(i.grams * i.fat_per_100g / 100.0) as total_fat,
+        SUM(i.grams * i.fiber_per_100g / 100.0) as total_fiber
+      FROM meal_entries e
+      JOIN meal_items i ON e.id = i.meal_id
+      WHERE e.date LIKE ?
+      GROUP BY e.date
+    ''', ['$prefix%']);
+
+    final mealDataByDate = <String, Map<String, double>>{};
+    for (final r in mealRows) {
+      final d = r['date'] as String;
+      mealDataByDate[d] = {
+        'kcal': ((r['total_kcal'] as num?) ?? 0).toDouble(),
+        'protein': ((r['total_protein'] as num?) ?? 0).toDouble(),
+        'carbs': ((r['total_carbs'] as num?) ?? 0).toDouble(),
+        'fat': ((r['total_fat'] as num?) ?? 0).toDouble(),
+        'fiber': ((r['total_fiber'] as num?) ?? 0).toDouble(),
+      };
+    }
+
+    final metricRows = await db.query(
+      'daily_metrics',
+      where: 'date LIKE ?',
+      whereArgs: ['$prefix%'],
+    );
+    final metricDataByDate = <String, Map<String, dynamic>>{};
+    for (final r in metricRows) {
+      final d = r['date'] as String;
+      metricDataByDate[d] = {
+        'water': (r['water_ml'] as num?)?.toInt() ?? 0,
+        'coffee': (r['coffee_cups'] as num?)?.toInt() ?? 0,
+        'weight': (r['weight_kg'] as num?)?.toDouble(),
+      };
+    }
+
+    final allDates = <String>{...mealDataByDate.keys, ...metricDataByDate.keys};
+    final result = <String, DailyStatEntry>{};
+    for (final dateStr in allDates) {
+      final m = mealDataByDate[dateStr];
+      final met = metricDataByDate[dateStr];
+      result[dateStr] = DailyStatEntry(
+        date: dateStr,
+        kcal: m?['kcal'] ?? 0.0,
+        protein: m?['protein'] ?? 0.0,
+        carbs: m?['carbs'] ?? 0.0,
+        fat: m?['fat'] ?? 0.0,
+        fiber: m?['fiber'] ?? 0.0,
+        waterMl: met?['water'] ?? 0,
+        coffeeCups: met?['coffee'] ?? 0,
+        weightKg: met?['weight'],
+      );
+    }
+    return result;
+  }
+
+  Future<DailyAiSummary?> getDailyAiSummary(String date) async {
+    final db = await database;
+    final rows = await db.query(
+      'daily_ai_summaries',
+      where: 'date = ?',
+      whereArgs: [date],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return DailyAiSummary.fromMap(rows.first);
+  }
+
+  Future<void> saveDailyAiSummary(DailyAiSummary summary) async {
+    final db = await database;
+    await db.insert(
+      'daily_ai_summaries',
+      summary.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    onDataMutated?.call();
+  }
+
+  Future<Set<String>> getDatesWithAiSummary(int year, int month) async {
+    final db = await database;
+    final prefix = '$year-${month.toString().padLeft(2, '0')}-';
+    final rows = await db.query(
+      'daily_ai_summaries',
+      columns: ['date'],
+      where: 'date LIKE ?',
+      whereArgs: ['$prefix%'],
+    );
+    return rows.map((r) => r['date'] as String).toSet();
+  }
+
   /// Flushes SQLite WAL to the main .sqlite file before uploading to Google Drive
   Future<File> prepareDatabaseFileForBackup() async {
     final db = await database;
@@ -566,6 +691,7 @@ class LocalDatabase {
     final items = await db.query('meal_items');
     final metrics = await db.query('daily_metrics');
     final favorites = await db.query('favorite_foods');
+    final summaries = await db.query('daily_ai_summaries');
 
     return {
       'version': 1,
@@ -575,6 +701,7 @@ class LocalDatabase {
       'meal_items': items,
       'daily_metrics': metrics,
       'favorite_foods': favorites,
+      'daily_ai_summaries': summaries,
     };
   }
 
@@ -624,6 +751,16 @@ class LocalDatabase {
         for (final fav in data['favorite_foods'] as List) {
           if (fav is Map) {
             await txn.insert('favorite_foods', Map<String, dynamic>.from(fav), conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        }
+      }
+
+      // 6. Restore Daily AI Summaries
+      if (data['daily_ai_summaries'] is List) {
+        await txn.delete('daily_ai_summaries');
+        for (final sum in data['daily_ai_summaries'] as List) {
+          if (sum is Map) {
+            await txn.insert('daily_ai_summaries', Map<String, dynamic>.from(sum), conflictAlgorithm: ConflictAlgorithm.replace);
           }
         }
       }

@@ -13,6 +13,7 @@ class TodayScreen extends StatelessWidget {
   final ValueChanged<int> onUpdateCoffee;
   final VoidCallback onTapWeight;
   final VoidCallback onOpenMenuAdvisor;
+  final VoidCallback onOpenDailySummary;
   final ValueChanged<MealEntry> onDeleteMeal;
   final ValueChanged<MealEntry> onEditMeal;
 
@@ -26,6 +27,7 @@ class TodayScreen extends StatelessWidget {
     required this.onUpdateCoffee,
     required this.onTapWeight,
     required this.onOpenMenuAdvisor,
+    required this.onOpenDailySummary,
     required this.onDeleteMeal,
     required this.onEditMeal,
   });
@@ -524,7 +526,66 @@ class TodayScreen extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 12),
+
+        // 2B. END-OF-DAY AI SUMMARY BANNER
+        Card(
+          clipBehavior: Clip.antiAlias,
+          color: cs.primaryContainer.withValues(alpha: 0.45),
+          child: InkWell(
+            onTap: onOpenDailySummary,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.16),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Symbols.auto_awesome_rounded,
+                      size: 18,
+                      color: cs.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Resoconto AI di fine giornata',
+                          style: tt.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Valutazione macro, idratazione e consiglio per domani',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Symbols.chevron_right_rounded,
+                    color: cs.primary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
 
         // 3. CHRONOLOGICAL TIMELINE SECTION
         Row(

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 enum GoalType { deficit, maintain, surplus }
 
 enum AiProviderType { gemini, openai }
@@ -371,4 +373,62 @@ class DailyStatEntry {
     this.coffeeCups = 0,
     this.weightKg,
   });
+}
+
+class DailyAiSummary {
+  final String date;
+  final double score;
+  final String headline;
+  final String verdict;
+  final List<String> strengths;
+  final List<String> warnings;
+  final String adviceTomorrow;
+  final String createdAt;
+
+  const DailyAiSummary({
+    required this.date,
+    required this.score,
+    required this.headline,
+    required this.verdict,
+    required this.strengths,
+    required this.warnings,
+    required this.adviceTomorrow,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'date': date,
+        'score': score,
+        'headline': headline,
+        'verdict': verdict,
+        'strengths_json': jsonEncode(strengths),
+        'warnings_json': jsonEncode(warnings),
+        'advice_tomorrow': adviceTomorrow,
+        'created_at': createdAt,
+      };
+
+  factory DailyAiSummary.fromMap(Map<String, dynamic> map) {
+    List<String> decodeList(dynamic raw) {
+      if (raw is String && raw.isNotEmpty) {
+        try {
+          final parsed = jsonDecode(raw);
+          if (parsed is List) {
+            return parsed.map((e) => e.toString()).toList();
+          }
+        } catch (_) {}
+      }
+      return const [];
+    }
+
+    return DailyAiSummary(
+      date: map['date'] as String,
+      score: ((map['score'] as num?) ?? 7.0).toDouble(),
+      headline: (map['headline'] as String?) ?? '',
+      verdict: (map['verdict'] as String?) ?? '',
+      strengths: decodeList(map['strengths_json']),
+      warnings: decodeList(map['warnings_json']),
+      adviceTomorrow: (map['advice_tomorrow'] as String?) ?? '',
+      createdAt: (map['created_at'] as String?) ?? '',
+    );
+  }
 }
