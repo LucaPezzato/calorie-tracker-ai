@@ -8,6 +8,7 @@ import '../services/ai_nutrition_service.dart';
 import '../services/drive_backup_service.dart';
 import '../services/firebase_backup_service.dart';
 import '../services/secure_keys_service.dart';
+import '../services/water_reminder_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/nutrient_colors.dart';
 
@@ -113,6 +114,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ? 'gemini-2.5-flash'
           : 'gpt-4o-mini',
       autoBackupEnabled: _autoBackup,
+      lastDriveBackupAt: widget.profile.lastDriveBackupAt,
+      waterReminderEnabled: widget.profile.waterReminderEnabled,
+      waterReminderStartMinutes: widget.profile.waterReminderStartMinutes,
+      waterReminderEndMinutes: widget.profile.waterReminderEndMinutes,
+      waterReminderIntervalMinutes:
+          widget.profile.waterReminderIntervalMinutes,
     );
     widget.onProfileChanged(updated);
   }
@@ -325,6 +332,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   preferredAiProvider: _provider,
                   preferredAiModel: p.preferredAiModel,
                   autoBackupEnabled: _autoBackup,
+                  lastDriveBackupAt: p.lastDriveBackupAt,
+                  waterReminderEnabled: p.waterReminderEnabled,
+                  waterReminderStartMinutes: p.waterReminderStartMinutes,
+                  waterReminderEndMinutes: p.waterReminderEndMinutes,
+                  waterReminderIntervalMinutes: p.waterReminderIntervalMinutes,
                 ),
               );
               Navigator.pop(ctx);
@@ -1262,6 +1274,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ? 'gemini-2.5-flash'
                             : 'gpt-4o-mini',
                         autoBackupEnabled: _autoBackup,
+                        lastDriveBackupAt: p.lastDriveBackupAt,
+                        waterReminderEnabled: p.waterReminderEnabled,
+                        waterReminderStartMinutes: p.waterReminderStartMinutes,
+                        waterReminderEndMinutes: p.waterReminderEndMinutes,
+                        waterReminderIntervalMinutes:
+                            p.waterReminderIntervalMinutes,
                       ),
                     );
                     _loadStoredKey();
@@ -1312,6 +1330,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+
+        // 2B. WATER REMINDERS (QUIET EVENING HOURS)
+        _buildWaterReminderCard(context, p),
         const SizedBox(height: 12),
 
         // 3. GUIDED TDEE & MACRO TARGETS + MANUAL OVERRIDE
@@ -1449,6 +1471,242 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _updateWaterReminder(UserProfile updated) async {
+    if (updated.waterReminderEnabled) {
+      final granted = await WaterReminderService.instance.requestPermission();
+      if (!granted && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Permesso notifiche negato: abilitalo dalle impostazioni di sistema.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    widget.onProfileChanged(updated);
+    await LocalDatabase.instance.saveUserProfile(updated);
+    await WaterReminderService.instance.syncSchedule(updated);
+  }
+
+  Future<void> _pickReminderTime({
+    required UserProfile profile,
+    required bool isStart,
+  }) async {
+    final currentMinutes = isStart
+        ? profile.waterReminderStartMinutes
+        : profile.waterReminderEndMinutes;
+    final initial = TimeOfDay(
+      hour: currentMinutes ~/ 60,
+      minute: currentMinutes % 60,
+    );
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+      helpText: isStart
+          ? 'Inizio promemoria (mattina)'
+          : 'Stop serale (nessuna notifica dopo)',
+    );
+    if (picked == null) return;
+    final pickedMinutes = picked.hour * 60 + picked.minute;
+
+    int start = profile.waterReminderStartMinutes;
+    int end = profile.waterReminderEndMinutes;
+    if (isStart) {
+      start = pickedMinutes;
+      if (start > end) {
+        end = (start + profile.waterReminderIntervalMinutes)
+            .clamp(0, 23 * 60 + 59);
+      }
+    } else {
+      end = pickedMinutes;
+      if (end < start) {
+        start = (end - profile.waterReminderIntervalMinutes)
+            .clamp(0, 23 * 60 + 59);
+      }
+    }
+
+    await _updateWaterReminder(
+      profile.copyWith(
+        waterReminderStartMinutes: start,
+        waterReminderEndMinutes: end,
+      ),
+    );
+  }
+
+  Widget _buildWaterReminderCard(BuildContext context, UserProfile p) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final nutrients = context.nutrients;
+
+    final slots = WaterReminderService.computeSlots(
+      startMinutes: p.waterReminderStartMinutes,
+      endMinutes: p.waterReminderEndMinutes,
+      intervalMinutes: p.waterReminderIntervalMinutes,
+    );
+    final startLabel =
+        WaterReminderService.formatMinutes(p.waterReminderStartMinutes);
+    final endLabel =
+        WaterReminderService.formatMinutes(p.waterReminderEndMinutes);
+
+    const intervalOptions = [
+      (60, '1 ora'),
+      (90, '1h 30m'),
+      (120, '2 ore'),
+      (180, '3 ore'),
+    ];
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Symbols.water_drop_rounded,
+                  color: nutrients.water,
+                  size: 22,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Promemoria Idratazione',
+                    style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Switch(
+                  value: p.waterReminderEnabled,
+                  onChanged: (enabled) => _updateWaterReminder(
+                    p.copyWith(waterReminderEnabled: enabled),
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              p.waterReminderEnabled
+                  ? 'Attivo dalle $startLabel alle $endLabel · Silenzioso la sera'
+                  : 'Ricevi un promemoria per bere acqua solo nelle ore diurne.',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            if (p.waterReminderEnabled) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () =>
+                          _pickReminderTime(profile: p, isStart: true),
+                      icon: const Icon(Symbols.wb_sunny_rounded, size: 17),
+                      label: Text('Inizio: $startLabel'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () =>
+                          _pickReminderTime(profile: p, isStart: false),
+                      icon: const Icon(Symbols.bedtime_rounded, size: 17),
+                      label: Text('Stop sera: $endLabel'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Frequenza',
+                style: tt.labelMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: intervalOptions.map((opt) {
+                  final selected = p.waterReminderIntervalMinutes == opt.$1;
+                  return ChoiceChip(
+                    label: Text(opt.$2),
+                    selected: selected,
+                    onSelected: (_) => _updateWaterReminder(
+                      p.copyWith(waterReminderIntervalMinutes: opt.$1),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: cs.surfaceDim,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Orari programmati (${slots.length}/giorno)',
+                      style: tt.labelSmall?.copyWith(
+                        color: nutrients.water,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      slots.isEmpty
+                          ? 'Nessuno slot nella fascia selezionata'
+                          : slots
+                              .map(
+                                (s) =>
+                                    '${s.hour.toString().padLeft(2, '0')}:${s.minute.toString().padLeft(2, '0')}',
+                              )
+                              .join(' · '),
+                      style: tt.bodySmall?.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Nessuna notifica verrà inviata dopo le $endLabel.',
+                      style: tt.labelSmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () async {
+                    final granted =
+                        await WaterReminderService.instance.requestPermission();
+                    if (!granted) return;
+                    await WaterReminderService.instance.sendTestNotification();
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Notifica di test inviata!'),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Symbols.notifications_active_rounded,
+                      size: 18),
+                  label: const Text('Invia notifica di test'),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

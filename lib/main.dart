@@ -16,6 +16,7 @@ import 'screens/stats_screen.dart';
 import 'screens/today_screen.dart';
 import 'services/drive_backup_service.dart';
 import 'services/firebase_backup_service.dart';
+import 'services/water_reminder_service.dart';
 import 'services/widget_sync_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/nutrient_colors.dart';
@@ -23,6 +24,7 @@ import 'theme/nutrient_colors.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await WidgetSyncService.initialize();
+  await WaterReminderService.instance.initialize();
   runApp(const ProviderScope(child: CalorieTrackerAiApp()));
 }
 
@@ -142,6 +144,7 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
       metrics: metrics,
       meals: meals,
     );
+    WaterReminderService.instance.syncSchedule(profile);
   }
 
   Future<void> _deleteMeal(MealEntry meal) async {

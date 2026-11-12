@@ -26,6 +26,10 @@ class UserProfile {
   final String preferredAiModel;
   final bool autoBackupEnabled;
   final DateTime? lastDriveBackupAt;
+  final bool waterReminderEnabled;
+  final int waterReminderStartMinutes; // minutes from midnight (default 08:30 = 510)
+  final int waterReminderEndMinutes;   // minutes from midnight (default 19:30 = 1170)
+  final int waterReminderIntervalMinutes; // default 120 (every 2 hours)
 
   const UserProfile({
     this.sex = 'M',
@@ -45,6 +49,10 @@ class UserProfile {
     this.preferredAiModel = 'gemini-2.5-flash',
     this.autoBackupEnabled = true,
     this.lastDriveBackupAt,
+    this.waterReminderEnabled = false,
+    this.waterReminderStartMinutes = 510,
+    this.waterReminderEndMinutes = 1170,
+    this.waterReminderIntervalMinutes = 120,
   });
 
   /// Guided TDEE & Macro Calculation using Mifflin-St Jeor equation
@@ -60,6 +68,10 @@ class UserProfile {
     String preferredAiModel = 'gemini-2.5-flash',
     bool autoBackupEnabled = true,
     DateTime? lastDriveBackupAt,
+    bool waterReminderEnabled = false,
+    int waterReminderStartMinutes = 510,
+    int waterReminderEndMinutes = 1170,
+    int waterReminderIntervalMinutes = 120,
   }) {
     final age = (DateTime.now().year - birthYear).clamp(14, 100);
     final bmr = (10 * weightKg) +
@@ -101,6 +113,10 @@ class UserProfile {
       preferredAiModel: preferredAiModel,
       autoBackupEnabled: autoBackupEnabled,
       lastDriveBackupAt: lastDriveBackupAt,
+      waterReminderEnabled: waterReminderEnabled,
+      waterReminderStartMinutes: waterReminderStartMinutes,
+      waterReminderEndMinutes: waterReminderEndMinutes,
+      waterReminderIntervalMinutes: waterReminderIntervalMinutes,
     );
   }
 
@@ -122,6 +138,10 @@ class UserProfile {
     String? preferredAiModel,
     bool? autoBackupEnabled,
     DateTime? lastDriveBackupAt,
+    bool? waterReminderEnabled,
+    int? waterReminderStartMinutes,
+    int? waterReminderEndMinutes,
+    int? waterReminderIntervalMinutes,
   }) {
     return UserProfile(
       sex: sex ?? this.sex,
@@ -141,6 +161,13 @@ class UserProfile {
       preferredAiModel: preferredAiModel ?? this.preferredAiModel,
       autoBackupEnabled: autoBackupEnabled ?? this.autoBackupEnabled,
       lastDriveBackupAt: lastDriveBackupAt ?? this.lastDriveBackupAt,
+      waterReminderEnabled: waterReminderEnabled ?? this.waterReminderEnabled,
+      waterReminderStartMinutes:
+          waterReminderStartMinutes ?? this.waterReminderStartMinutes,
+      waterReminderEndMinutes:
+          waterReminderEndMinutes ?? this.waterReminderEndMinutes,
+      waterReminderIntervalMinutes:
+          waterReminderIntervalMinutes ?? this.waterReminderIntervalMinutes,
     );
   }
 }

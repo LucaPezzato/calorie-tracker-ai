@@ -33,6 +33,16 @@ class LocalDatabase {
             'ALTER TABLE daily_metrics ADD COLUMN coffee_cups INTEGER NOT NULL DEFAULT 0',
           );
         } catch (_) {}
+        for (final ddl in const [
+          'ALTER TABLE user_profile ADD COLUMN water_reminder_enabled INTEGER NOT NULL DEFAULT 0',
+          'ALTER TABLE user_profile ADD COLUMN water_reminder_start_minutes INTEGER NOT NULL DEFAULT 510',
+          'ALTER TABLE user_profile ADD COLUMN water_reminder_end_minutes INTEGER NOT NULL DEFAULT 1170',
+          'ALTER TABLE user_profile ADD COLUMN water_reminder_interval_minutes INTEGER NOT NULL DEFAULT 120',
+        ]) {
+          try {
+            await db.execute(ddl);
+          } catch (_) {}
+        }
         await db.execute('''
           CREATE TABLE IF NOT EXISTS daily_ai_summaries (
             date TEXT PRIMARY KEY,
@@ -71,7 +81,11 @@ class LocalDatabase {
         preferred_ai_provider TEXT NOT NULL DEFAULT 'gemini',
         preferred_ai_model TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
         auto_backup_enabled INTEGER NOT NULL DEFAULT 1,
-        last_drive_backup_at TEXT
+        last_drive_backup_at TEXT,
+        water_reminder_enabled INTEGER NOT NULL DEFAULT 0,
+        water_reminder_start_minutes INTEGER NOT NULL DEFAULT 510,
+        water_reminder_end_minutes INTEGER NOT NULL DEFAULT 1170,
+        water_reminder_interval_minutes INTEGER NOT NULL DEFAULT 120
       )
     ''');
 
@@ -799,6 +813,13 @@ class LocalDatabase {
       lastDriveBackupAt: r['last_drive_backup_at'] != null
           ? DateTime.tryParse(r['last_drive_backup_at'] as String)
           : null,
+      waterReminderEnabled: (r['water_reminder_enabled'] as int?) == 1,
+      waterReminderStartMinutes:
+          (r['water_reminder_start_minutes'] as int?) ?? 510,
+      waterReminderEndMinutes:
+          (r['water_reminder_end_minutes'] as int?) ?? 1170,
+      waterReminderIntervalMinutes:
+          (r['water_reminder_interval_minutes'] as int?) ?? 120,
     );
   }
 
@@ -825,6 +846,10 @@ class LocalDatabase {
         'preferred_ai_model': p.preferredAiModel,
         'auto_backup_enabled': p.autoBackupEnabled ? 1 : 0,
         'last_drive_backup_at': p.lastDriveBackupAt?.toIso8601String(),
+        'water_reminder_enabled': p.waterReminderEnabled ? 1 : 0,
+        'water_reminder_start_minutes': p.waterReminderStartMinutes,
+        'water_reminder_end_minutes': p.waterReminderEndMinutes,
+        'water_reminder_interval_minutes': p.waterReminderIntervalMinutes,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
