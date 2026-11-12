@@ -69,43 +69,9 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
       _loggedAtTime =
           '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
       _mealId = _uuid.v4();
-      _mealTitle = 'Salmone al forno con patate';
-      _promptCtrl = TextEditingController(
-        text: 'Trancio di salmone al forno con patate e olio',
-      );
-      _items = [
-        MealItem(
-          id: _uuid.v4(),
-          mealId: _mealId,
-          name: 'Trancio di salmone',
-          grams: 180,
-          kcalPer100g: 205,
-          proteinPer100g: 20.5,
-          carbsPer100g: 0,
-          fatPer100g: 12.2,
-        ),
-        MealItem(
-          id: _uuid.v4(),
-          mealId: _mealId,
-          name: 'Patate al forno',
-          grams: 160,
-          kcalPer100g: 93,
-          proteinPer100g: 2.5,
-          carbsPer100g: 21.0,
-          fatPer100g: 0.1,
-          fiberPer100g: 2.2,
-        ),
-        MealItem(
-          id: _uuid.v4(),
-          mealId: _mealId,
-          name: 'Olio EVO (cottura)',
-          grams: 10,
-          kcalPer100g: 884,
-          proteinPer100g: 0,
-          carbsPer100g: 0,
-          fatPer100g: 100,
-        ),
-      ];
+      _mealTitle = '';
+      _promptCtrl = TextEditingController();
+      _items = [];
     }
   }
 
@@ -161,6 +127,15 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
   }
 
   Future<void> _runAiAnalysis() async {
+    if (_promptCtrl.text.trim().isEmpty && _selectedImageBytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Scrivi cosa hai mangiato o scatta una foto prima di analizzare.'),
+        ),
+      );
+      return;
+    }
+
     final apiKey = await _keysService.getApiKey(
       widget.profile.preferredAiProvider,
     );
@@ -393,43 +368,45 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
             const SizedBox(height: 14),
 
             // Live Recalculated Total Banner
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: cs.primaryContainer,
-                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _mealTitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: tt.titleMedium,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'P: ${_totalP.round()}g  •  C: ${_totalC.round()}g  •  G: ${_totalG.round()}g',
-                          style: tt.labelMedium?.copyWith(
-                            color: cs.onPrimaryContainer.withValues(alpha: 0.8),
+            if (_items.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _mealTitle.isEmpty ? 'Nuovo pasto' : _mealTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.titleMedium,
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 2),
+                          Text(
+                            'P: ${_totalP.round()}g  •  C: ${_totalC.round()}g  •  G: ${_totalG.round()}g',
+                            style: tt.labelMedium?.copyWith(
+                              color: cs.onPrimaryContainer.withValues(alpha: 0.8),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '$_totalKcal kcal',
-                    style: tt.headlineSmall?.copyWith(color: cs.primary),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Text(
+                      '$_totalKcal kcal',
+                      style: tt.headlineSmall?.copyWith(color: cs.primary),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
+            ],
 
             // Interactive Ingredient Cards with 120fps Gram Sliders (Swipe + Confirm to delete)
             ...List.generate(_items.length, (index) {
@@ -685,31 +662,35 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
             }),
 
             // Conversational Refinement Input Bar
-            const SizedBox(height: 4),
-            TextField(
-              controller: _refineCtrl,
-              onSubmitted: (_) => _runAiRefinement(),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: cs.surfaceDim,
-                hintText: 'Modifica o aggiungi dettagli (es. "senza formaggio")...',
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(999),
-                  borderSide: BorderSide(
-                    color: cs.outlineVariant.withValues(alpha: 0.35),
+            if (_items.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              TextField(
+                controller: _refineCtrl,
+                onSubmitted: (_) => _runAiRefinement(),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: cs.surfaceDim,
+                  hintText: 'Modifica o aggiungi dettagli (es. "senza formaggio")...',
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(999),
+                    borderSide: BorderSide(
+                      color: cs.outlineVariant.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  suffixIcon: IconButton(
+                    icon: Icon(Symbols.send_rounded, color: cs.primary),
+                    onPressed: _runAiRefinement,
                   ),
                 ),
-                suffixIcon: IconButton(
-                  icon: Icon(Symbols.send_rounded, color: cs.primary),
-                  onPressed: _runAiRefinement,
-                ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ] else ...[
+              const SizedBox(height: 8),
+            ],
 
             // Save CTA Button
             FilledButton.icon(
@@ -723,26 +704,28 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
                     : null,
                 shape: const StadiumBorder(),
               ),
-              onPressed: () {
-                if (_items.isEmpty) {
-                  if (widget.existingMeal != null &&
-                      widget.onDeleteMeal != null) {
-                    widget.onDeleteMeal!();
-                  }
-                  Navigator.of(context).pop();
-                  return;
-                }
-                final entry = MealEntry(
-                  id: _mealId,
-                  date: widget.selectedDate,
-                  loggedAt: _loggedAtTime,
-                  title: _mealTitle,
-                  localPhotoPath: _localPhotoPath,
-                  items: _items,
-                );
-                widget.onSaveMeal(entry);
-                Navigator.of(context).pop();
-              },
+              onPressed: _items.isEmpty && widget.existingMeal == null
+                  ? null
+                  : () {
+                      if (_items.isEmpty) {
+                        if (widget.existingMeal != null &&
+                            widget.onDeleteMeal != null) {
+                          widget.onDeleteMeal!();
+                        }
+                        Navigator.of(context).pop();
+                        return;
+                      }
+                      final entry = MealEntry(
+                        id: _mealId,
+                        date: widget.selectedDate,
+                        loggedAt: _loggedAtTime,
+                        title: _mealTitle.isEmpty ? 'Pasto' : _mealTitle,
+                        localPhotoPath: _localPhotoPath,
+                        items: _items,
+                      );
+                      widget.onSaveMeal(entry);
+                      Navigator.of(context).pop();
+                    },
               icon: Icon(
                 _items.isEmpty && widget.existingMeal != null
                     ? Symbols.delete_rounded
