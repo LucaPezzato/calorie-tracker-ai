@@ -38,6 +38,8 @@ class LocalDatabase {
           'ALTER TABLE user_profile ADD COLUMN water_reminder_start_minutes INTEGER NOT NULL DEFAULT 510',
           'ALTER TABLE user_profile ADD COLUMN water_reminder_end_minutes INTEGER NOT NULL DEFAULT 1170',
           'ALTER TABLE user_profile ADD COLUMN water_reminder_interval_minutes INTEGER NOT NULL DEFAULT 120',
+          'ALTER TABLE user_profile ADD COLUMN meal_reminder_enabled INTEGER NOT NULL DEFAULT 0',
+          'ALTER TABLE user_profile ADD COLUMN meal_reminder_minutes INTEGER NOT NULL DEFAULT 1260',
         ]) {
           try {
             await db.execute(ddl);
@@ -85,7 +87,9 @@ class LocalDatabase {
         water_reminder_enabled INTEGER NOT NULL DEFAULT 0,
         water_reminder_start_minutes INTEGER NOT NULL DEFAULT 510,
         water_reminder_end_minutes INTEGER NOT NULL DEFAULT 1170,
-        water_reminder_interval_minutes INTEGER NOT NULL DEFAULT 120
+        water_reminder_interval_minutes INTEGER NOT NULL DEFAULT 120,
+        meal_reminder_enabled INTEGER NOT NULL DEFAULT 0,
+        meal_reminder_minutes INTEGER NOT NULL DEFAULT 1260
       )
     ''');
 
@@ -820,6 +824,8 @@ class LocalDatabase {
           (r['water_reminder_end_minutes'] as int?) ?? 1170,
       waterReminderIntervalMinutes:
           (r['water_reminder_interval_minutes'] as int?) ?? 120,
+      mealReminderEnabled: (r['meal_reminder_enabled'] as int?) == 1,
+      mealReminderMinutes: (r['meal_reminder_minutes'] as int?) ?? 1260,
     );
   }
 
@@ -850,9 +856,101 @@ class LocalDatabase {
         'water_reminder_start_minutes': p.waterReminderStartMinutes,
         'water_reminder_end_minutes': p.waterReminderEndMinutes,
         'water_reminder_interval_minutes': p.waterReminderIntervalMinutes,
+        'meal_reminder_enabled': p.mealReminderEnabled ? 1 : 0,
+        'meal_reminder_minutes': p.mealReminderMinutes,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     onDataMutated?.call();
+  }
+
+  /// Returns up to [limit] most frequently logged distinct meals (with items)
+  /// for 1-tap quick repeat.
+  Future<List<MealEntry>> getFrequentMeals({int limit = 3}) async {
+    final db = await database;
+    final rows = await db.rawQuery('''
+      SELECT title, MAX(id) AS latest_id, COUNT(*) AS cnt
+      FROM meal_entries
+      WHERE TRIM(title) != ''
+      GROUP BY LOWER(TRIM(title))
+      ORDER BY cnt DESC, MAX(date) DESC
+      LIMIT ?
+    ''', [limit]);
+
+    final results = <MealEntry>[];
+    for (final r in rows) {
+      final latestId = r['latest_id'] as String?;
+      if (latestId == null) continue;
+      final mealRows = await db.query(
+        'meal_entries',
+        where: 'id = ?',
+        whereArgs: [latestId],
+      );
+      if (mealRows.isEmpty) continue;
+      final itemRows = await db.query(
+        'meal_items',
+        where: 'meal_id = ?',
+        whereArgs: [latestId],
+      );
+      final row = mealRows.first;
+      final items = itemRows.map(MealItem.fromMap).toList();
+      results.add(
+        MealEntry(
+          id: latestId,
+          date: row['date'] as String,
+          loggedAt: row['logged_at'] as String,
+          title: row['title'] as String,
+          notes: row['notes'] as String?,
+          localPhotoPath: row['local_photo_path'] as String?,
+          items: items,
+        ),
+      );
+    }
+    return results;
+  }
+
+  /// Days elapsed since the latest logged meal strictly before [referenceDate].
+  /// Returns null if the user has never logged any meal yet.
+  Future<int?> getDaysSinceLastMeal(String referenceDate) async {
+    final db = await database;
+    final rows = await db.rawQuery(
+      'SELECT MAX(date) AS last_date FROM meal_entries WHERE date <= ?',
+      [referenceDate],
+    );
+    final lastStr = rows.firstOrNull?['last_date'] as String?;
+    if (lastStr == null) return null;
+    final ref = DateTime.tryParse(referenceDate);
+    final last = DateTime.tryParse(lastStr);
+    if (ref == null || last == null) return null;
+    return ref.difference(last).inDays;
+  }
+
+  /// Computes Monday-Sunday consistency and weekly calorie budget for [referenceDate].
+  Future<({int activeDays, int totalKcal, int daysElapsed})>
+      getWeeklyConsistency(String referenceDate) async {
+    final db = await database;
+    final ref = DateTime.tryParse(referenceDate) ?? DateTime.now();
+    // Monday = 1 .. Sunday = 7
+    final monday = ref.subtract(Duration(days: ref.weekday - 1));
+    final sunday = monday.add(const Duration(days: 6));
+    final startStr = monday.toIso8601String().split('T').first;
+    final endStr = sunday.toIso8601String().split('T').first;
+
+    final rows = await db.rawQuery('''
+      SELECT date, SUM(total_kcal) AS day_kcal
+      FROM meal_entries
+      WHERE date >= ? AND date <= ?
+      GROUP BY date
+    ''', [startStr, endStr]);
+
+    int totalKcal = 0;
+    for (final r in rows) {
+      totalKcal += (r['day_kcal'] as num?)?.toInt() ?? 0;
+    }
+    return (
+      activeDays: rows.length,
+      totalKcal: totalKcal,
+      daysElapsed: ref.weekday,
+    );
   }
 }

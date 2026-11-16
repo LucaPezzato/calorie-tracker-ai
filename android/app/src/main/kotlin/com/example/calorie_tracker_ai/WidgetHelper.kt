@@ -139,10 +139,14 @@ object WidgetHelper {
         )
     }
 
-    fun createOpenAppPendingIntent(context: Context, requestCode: Int): PendingIntent {
+    fun createOpenAppPendingIntent(
+        context: Context,
+        requestCode: Int,
+        uriString: String = "calorietracker://open_today"
+    ): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             this.action = Intent.ACTION_VIEW
-            data = Uri.parse("calorietracker://open_today")
+            data = Uri.parse(uriString)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         return PendingIntent.getActivity(

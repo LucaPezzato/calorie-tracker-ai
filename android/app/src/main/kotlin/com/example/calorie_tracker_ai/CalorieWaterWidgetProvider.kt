@@ -40,6 +40,14 @@ class CalorieWaterWidgetProvider : AppWidgetProvider() {
             val openAppPendingIntent = WidgetHelper.createOpenAppPendingIntent(context, 100)
             views.setOnClickPendingIntent(R.id.widget_clickable_body, openAppPendingIntent)
             views.setOnClickPendingIntent(R.id.widget_container, openAppPendingIntent)
+            views.setOnClickPendingIntent(
+                R.id.btn_quick_meal,
+                WidgetHelper.createOpenAppPendingIntent(
+                    context,
+                    105,
+                    "calorietracker://add-meal?mode=photo"
+                )
+            )
 
             // Click Buttons
             views.setOnClickPendingIntent(

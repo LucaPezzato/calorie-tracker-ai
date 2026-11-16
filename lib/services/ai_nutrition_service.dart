@@ -665,4 +665,99 @@ $mealsSummary
       createdAt: DateTime.now().toIso8601String(),
     );
   }
+
+  /// Splits a single natural-language description of an entire day
+  /// (e.g. "Stamattina cappuccino e brioche, a pranzo pasta al pesto, stasera pizza")
+  /// into multiple separate meals ready to save in 1 tap.
+  Future<List<MealEntry>> analyzeFullDayMeals({
+    required AiProviderType provider,
+    required String modelName,
+    required String apiKey,
+    required String date,
+    required String userPrompt,
+  }) async {
+    const customSys = '''
+Sei un assistente nutrizionale AI. L'utente ti descrive tutta la sua giornata alimentare in una sola frase.
+Devi suddividerla nei singoli pasti (es. Colazione, Pranzo, Spuntino, Cena) e stimare gli ingredienti per ciascuno.
+Rispondi ESCLUSIVAMENTE con un JSON valido con questo schema esatto:
+{
+  "meals": [
+    {
+      "meal_title": "Colazione",
+      "logged_at": "08:30",
+      "items": [
+        {
+          "name": "Nome alimento in italiano",
+          "estimated_grams": 150,
+          "per_100g": {
+            "kcal": 250,
+            "protein_g": 8.0,
+            "carbs_g": 35.0,
+            "fat_g": 8.0,
+            "fiber_g": 2.0
+          }
+        }
+      ]
+    }
+  ]
+}
+''';
+
+    final rawJson = switch (provider) {
+      AiProviderType.gemini => await _callGemini(
+          modelName: modelName,
+          apiKey: apiKey,
+          prompt: userPrompt,
+          customSystemPrompt: customSys,
+        ),
+      AiProviderType.openai => await _callOpenAi(
+          modelName: modelName,
+          apiKey: apiKey,
+          prompt: userPrompt,
+          customSystemPrompt: customSys,
+        ),
+    };
+
+    String cleaned = rawJson
+        .replaceAll('```json', '')
+        .replaceAll('```', '')
+        .trim();
+    final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(cleaned);
+    if (jsonMatch != null) {
+      cleaned = jsonMatch.group(0)!;
+    }
+    final map = jsonDecode(cleaned) as Map<String, dynamic>;
+    final rawMeals = (map['meals'] as List<dynamic>? ?? []);
+
+    return rawMeals.map((mRaw) {
+      final m = mRaw as Map<String, dynamic>;
+      final mealId = _uuid.v4();
+      final rawItems = (m['items'] as List<dynamic>? ?? []);
+      final items = rawItems.map((e) {
+        final itemMap = e as Map<String, dynamic>;
+        final per100 =
+            itemMap['per_100g'] as Map<String, dynamic>? ?? <String, dynamic>{};
+        return MealItem(
+          id: _uuid.v4(),
+          mealId: mealId,
+          name: (itemMap['name'] ?? 'Alimento').toString(),
+          grams: (itemMap['estimated_grams'] as num?)?.toDouble() ?? 100.0,
+          kcalPer100g: (per100['kcal'] as num?)?.toDouble() ?? 0.0,
+          proteinPer100g: (per100['protein_g'] as num?)?.toDouble() ?? 0.0,
+          carbsPer100g: (per100['carbs_g'] as num?)?.toDouble() ?? 0.0,
+          fatPer100g: (per100['fat_g'] as num?)?.toDouble() ?? 0.0,
+          fiberPer100g: (per100['fiber_g'] as num?)?.toDouble() ?? 0.0,
+          source: MealItemSource.aiText,
+        );
+      }).toList();
+
+      return MealEntry(
+        id: mealId,
+        date: date,
+        loggedAt: (m['logged_at'] ?? '12:30').toString(),
+        title: (m['meal_title'] ?? 'Pasto').toString(),
+        items: items,
+      );
+    }).where((e) => e.items.isNotEmpty).toList();
+  }
 }

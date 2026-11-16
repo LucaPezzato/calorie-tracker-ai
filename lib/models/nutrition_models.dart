@@ -30,6 +30,8 @@ class UserProfile {
   final int waterReminderStartMinutes; // minutes from midnight (default 08:30 = 510)
   final int waterReminderEndMinutes;   // minutes from midnight (default 19:30 = 1170)
   final int waterReminderIntervalMinutes; // default 120 (every 2 hours)
+  final bool mealReminderEnabled;
+  final int mealReminderMinutes; // default 21:00 = 1260
 
   const UserProfile({
     this.sex = 'M',
@@ -53,6 +55,8 @@ class UserProfile {
     this.waterReminderStartMinutes = 510,
     this.waterReminderEndMinutes = 1170,
     this.waterReminderIntervalMinutes = 120,
+    this.mealReminderEnabled = false,
+    this.mealReminderMinutes = 1260,
   });
 
   /// Guided TDEE & Macro Calculation using Mifflin-St Jeor equation
@@ -72,6 +76,8 @@ class UserProfile {
     int waterReminderStartMinutes = 510,
     int waterReminderEndMinutes = 1170,
     int waterReminderIntervalMinutes = 120,
+    bool mealReminderEnabled = false,
+    int mealReminderMinutes = 1260,
   }) {
     final age = (DateTime.now().year - birthYear).clamp(14, 100);
     final bmr = (10 * weightKg) +
@@ -117,6 +123,8 @@ class UserProfile {
       waterReminderStartMinutes: waterReminderStartMinutes,
       waterReminderEndMinutes: waterReminderEndMinutes,
       waterReminderIntervalMinutes: waterReminderIntervalMinutes,
+      mealReminderEnabled: mealReminderEnabled,
+      mealReminderMinutes: mealReminderMinutes,
     );
   }
 
@@ -142,6 +150,8 @@ class UserProfile {
     int? waterReminderStartMinutes,
     int? waterReminderEndMinutes,
     int? waterReminderIntervalMinutes,
+    bool? mealReminderEnabled,
+    int? mealReminderMinutes,
   }) {
     return UserProfile(
       sex: sex ?? this.sex,
@@ -168,6 +178,8 @@ class UserProfile {
           waterReminderEndMinutes ?? this.waterReminderEndMinutes,
       waterReminderIntervalMinutes:
           waterReminderIntervalMinutes ?? this.waterReminderIntervalMinutes,
+      mealReminderEnabled: mealReminderEnabled ?? this.mealReminderEnabled,
+      mealReminderMinutes: mealReminderMinutes ?? this.mealReminderMinutes,
     );
   }
 }

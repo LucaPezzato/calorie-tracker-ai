@@ -9,6 +9,8 @@ class TodayScreen extends StatelessWidget {
   final DailyMetrics metrics;
   final List<MealEntry> meals;
   final double? previousWeightKg;
+  final int? daysSinceLastMeal;
+  final List<MealEntry> quickRepeatMeals;
   final ValueChanged<int> onAddWater;
   final ValueChanged<int> onUpdateCoffee;
   final VoidCallback onTapWeight;
@@ -16,6 +18,9 @@ class TodayScreen extends StatelessWidget {
   final VoidCallback onOpenDailySummary;
   final ValueChanged<MealEntry> onDeleteMeal;
   final ValueChanged<MealEntry> onEditMeal;
+  final ValueChanged<MealEntry>? onQuickRepeatMeal;
+  final VoidCallback? onDismissRecovery;
+  final VoidCallback? onOpenQuickAdd;
 
   const TodayScreen({
     super.key,
@@ -23,6 +28,8 @@ class TodayScreen extends StatelessWidget {
     required this.metrics,
     required this.meals,
     this.previousWeightKg,
+    this.daysSinceLastMeal,
+    this.quickRepeatMeals = const [],
     required this.onAddWater,
     required this.onUpdateCoffee,
     required this.onTapWeight,
@@ -30,6 +37,9 @@ class TodayScreen extends StatelessWidget {
     required this.onOpenDailySummary,
     required this.onDeleteMeal,
     required this.onEditMeal,
+    this.onQuickRepeatMeal,
+    this.onDismissRecovery,
+    this.onOpenQuickAdd,
   });
 
   int get _consumedKcal => meals.fold(0, (s, m) => s + m.totalKcal);
@@ -586,6 +596,99 @@ class TodayScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
+
+        // 2C. RECOVERY MODE BANNER (after >= 2 pause days)
+        if (daysSinceLastMeal != null &&
+            daysSinceLastMeal! >= 2 &&
+            meals.isEmpty) ...[
+          Card(
+            color: cs.secondaryContainer.withValues(alpha: 0.6),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Symbols.waving_hand_rounded,
+                        color: cs.onSecondaryContainer,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Bentornato! Nessun problema per i giorni di pausa',
+                          style: tt.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: cs.onSecondaryContainer,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'La costanza non significa perfezione. Riparti da oggi con un pasto o una stima rapida.',
+                    style: tt.bodySmall?.copyWith(
+                      color: cs.onSecondaryContainer.withValues(alpha: 0.85),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      FilledButton.tonal(
+                        onPressed: onDismissRecovery,
+                        child: const Text('Riparti da oggi'),
+                      ),
+                      const SizedBox(width: 8),
+                      if (onOpenQuickAdd != null)
+                        OutlinedButton.icon(
+                          onPressed: onOpenQuickAdd,
+                          icon: const Icon(Symbols.bolt_rounded, size: 16),
+                          label: const Text('Stima rapida'),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // 2D. 1-TAP QUICK REPEAT CHIPS ("Copia da ieri / Frequenti")
+        if (quickRepeatMeals.isNotEmpty && onQuickRepeatMeal != null) ...[
+          Text(
+            'Ripeti in 1 tap',
+            style: tt.labelMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            height: 38,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: quickRepeatMeals.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, idx) {
+                final m = quickRepeatMeals[idx];
+                return ActionChip(
+                  avatar: Icon(
+                    Symbols.history_rounded,
+                    size: 16,
+                    color: cs.primary,
+                  ),
+                  label: Text('${m.title} (${m.totalKcal} kcal)'),
+                  onPressed: () => onQuickRepeatMeal!(m),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
 
         // 3. CHRONOLOGICAL TIMELINE SECTION
         Row(

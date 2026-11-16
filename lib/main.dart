@@ -76,7 +76,10 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
     weightKg: 74.2,
   );
   List<MealEntry> _meals = [];
+  List<MealEntry> _quickRepeatMeals = [];
   double? _previousWeightKg;
+  int? _daysSinceLastMeal;
+  bool _recoveryDismissed = false;
   int _dataVersion = 0;
 
   @override
@@ -85,14 +88,12 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
     WidgetsBinding.instance.addObserver(this);
     HomeWidget.initiallyLaunchedFromHomeWidget().then((uri) {
       if (uri != null && mounted) {
-        setState(() => _selectedIndex = 0);
-        _loadFromDatabase();
+        _handleWidgetUri(uri);
       }
     });
     HomeWidget.widgetClicked.listen((uri) {
       if (uri != null && mounted) {
-        setState(() => _selectedIndex = 0);
-        _loadFromDatabase();
+        _handleWidgetUri(uri);
       }
     });
     _firebaseService.initialize().then((_) {
@@ -128,17 +129,56 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
     }
   }
 
+  void _handleWidgetUri(Uri uri) {
+    setState(() {
+      _selectedIndex = 0;
+      _selectedDate = _todayDate;
+    });
+    _loadFromDatabase();
+    if (uri.host == 'add-meal') {
+      final mode = uri.queryParameters['mode'] == 'photo' ? 1 : 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openMealSheet(initialMode: mode);
+      });
+    }
+  }
+
   Future<void> _loadFromDatabase() async {
     final meals = await LocalDatabase.instance.getMealsForDate(_selectedDate);
     final metrics = await LocalDatabase.instance.getDailyMetrics(_selectedDate);
     final profile = await LocalDatabase.instance.getUserProfile();
     final prevWeight = await LocalDatabase.instance.getPreviousLoggedWeight(_selectedDate);
+    final yesterdayStr = DateTime.parse(_selectedDate)
+        .subtract(const Duration(days: 1))
+        .toIso8601String()
+        .split('T')
+        .first;
+    final yesterdayMeals = await LocalDatabase.instance.getMealsForDate(yesterdayStr);
+    final frequentMeals = await LocalDatabase.instance.getFrequentMeals(limit: 4);
+    final seenTitles = <String>{};
+    final quickRepeats = <MealEntry>[];
+    for (final m in [...yesterdayMeals, ...frequentMeals]) {
+      final key = m.title.trim().toLowerCase();
+      if (key.isNotEmpty && seenTitles.add(key)) {
+        quickRepeats.add(m);
+        if (quickRepeats.length >= 4) break;
+      }
+    }
+    final daysGap = _isViewingToday
+        ? await LocalDatabase.instance.getDaysSinceLastMeal(_todayDate)
+        : null;
+    final todayMealsCount = _isViewingToday
+        ? meals.length
+        : (await LocalDatabase.instance.getMealsForDate(_todayDate)).length;
+
     if (!mounted) return;
     setState(() {
       _meals = meals;
       _metrics = metrics;
       _profile = profile;
       _previousWeightKg = prevWeight;
+      _quickRepeatMeals = quickRepeats;
+      _daysSinceLastMeal = daysGap;
       _dataVersion++;
     });
     if (_isViewingToday) {
@@ -149,6 +189,10 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
       );
     }
     WaterReminderService.instance.syncSchedule(profile);
+    WaterReminderService.instance.syncMealReminder(
+      profile: profile,
+      todayMealsCount: todayMealsCount,
+    );
   }
 
   void _shiftSelectedDate(int deltaDays) {
@@ -215,7 +259,7 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
     );
   }
 
-  void _openMealSheet({MealEntry? existingMeal}) {
+  void _openMealSheet({MealEntry? existingMeal, int initialMode = 0}) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -223,6 +267,7 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
         selectedDate: _selectedDate,
         profile: _profile,
         existingMeal: existingMeal,
+        initialMode: initialMode,
         onOpenMenuAdvisor: _openMenuAdvisor,
         onDeleteMeal: existingMeal != null
             ? () => _deleteMeal(existingMeal)
@@ -234,8 +279,69 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
               ..sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
           });
           LocalDatabase.instance.saveMealEntry(entry);
+          _syncTodayMealReminder();
+        },
+        onSaveMultipleMeals: (entries) async {
+          setState(() {
+            _meals = [..._meals, ...entries]
+              ..sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
+          });
+          for (final entry in entries) {
+            await LocalDatabase.instance.saveMealEntry(entry);
+          }
+          await _syncTodayMealReminder();
         },
       ),
+    );
+  }
+
+  Future<void> _syncTodayMealReminder() async {
+    final todayMeals = await LocalDatabase.instance.getMealsForDate(_todayDate);
+    await WaterReminderService.instance.syncMealReminder(
+      profile: _profile,
+      todayMealsCount: todayMeals.length,
+    );
+  }
+
+  Future<void> _quickRepeatMeal(MealEntry template) async {
+    final newId = const Uuid().v4();
+    final now = TimeOfDay.now();
+    final timeStr =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final clonedItems = template.items
+        .map(
+          (i) => MealItem(
+            id: const Uuid().v4(),
+            mealId: newId,
+            name: i.name,
+            grams: i.grams,
+            kcalPer100g: i.kcalPer100g,
+            proteinPer100g: i.proteinPer100g,
+            carbsPer100g: i.carbsPer100g,
+            fatPer100g: i.fatPer100g,
+            fiberPer100g: i.fiberPer100g,
+            source: MealItemSource.favorite,
+            barcode: i.barcode,
+          ),
+        )
+        .toList();
+    final entry = MealEntry(
+      id: newId,
+      date: _selectedDate,
+      loggedAt: timeStr,
+      title: template.title,
+      notes: template.notes,
+      items: clonedItems,
+    );
+    setState(() {
+      _meals = [..._meals, entry]
+        ..sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
+    });
+    await LocalDatabase.instance.saveMealEntry(entry);
+    await _syncTodayMealReminder();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Aggiunto "${entry.title}" (${entry.totalKcal} kcal)')),
     );
   }
 
@@ -438,6 +544,11 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
             metrics: _metrics,
             meals: _meals,
             previousWeightKg: _previousWeightKg,
+            daysSinceLastMeal: _recoveryDismissed ? null : _daysSinceLastMeal,
+            quickRepeatMeals: _quickRepeatMeals,
+            onQuickRepeatMeal: _quickRepeatMeal,
+            onDismissRecovery: () => setState(() => _recoveryDismissed = true),
+            onOpenQuickAdd: () => _openMealSheet(),
             onAddWater: (ml) {
               setState(() {
                 _metrics = _metrics.copyWith(

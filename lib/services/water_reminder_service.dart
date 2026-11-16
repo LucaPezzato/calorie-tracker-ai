@@ -10,11 +10,16 @@ class WaterReminderService {
   static final WaterReminderService instance = WaterReminderService._();
 
   static const int _baseNotificationId = 2000;
+  static const int _mealReminderId = 2100;
   static const int _maxSlots = 24;
   static const String _channelId = 'water_reminders';
   static const String _channelName = 'Promemoria Idratazione';
   static const String _channelDescription =
       'Notifiche periodiche per ricordarti di bere acqua durante il giorno.';
+  static const String _mealChannelId = 'meal_reminders';
+  static const String _mealChannelName = 'Promemoria Serale Pasti';
+  static const String _mealChannelDescription =
+      'Notifica serale discreta se hai registrato 0 o 1 pasto nella giornata.';
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -44,6 +49,14 @@ class WaterReminderService {
         _channelId,
         _channelName,
         description: _channelDescription,
+        importance: Importance.defaultImportance,
+      ),
+    );
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _mealChannelId,
+        _mealChannelName,
+        description: _mealChannelDescription,
         importance: Importance.defaultImportance,
       ),
     );
@@ -176,6 +189,55 @@ class WaterReminderService {
       title: 'Promemoria Acqua 💧',
       body: 'Notifica attiva! Riceverai i promemoria solo nella fascia oraria scelta.',
       notificationDetails: _notificationDetails(),
+    );
+  }
+
+  /// Schedules a gentle evening reminder ONLY if today has 0 or 1 logged meals.
+  /// If [todayMealsCount] >= 2, today's reminder is skipped and pushed to tomorrow.
+  Future<void> syncMealReminder({
+    required UserProfile profile,
+    required int todayMealsCount,
+  }) async {
+    await initialize();
+    await _plugin.cancel(id: _mealReminderId);
+    if (!profile.mealReminderEnabled) return;
+
+    final now = tz.TZDateTime.now(tz.local);
+    final hour = (profile.mealReminderMinutes ~/ 60).clamp(0, 23);
+    final minute = (profile.mealReminderMinutes % 60).clamp(0, 59);
+
+    var scheduled = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
+
+    if (todayMealsCount >= 2 || !scheduled.isAfter(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+
+    const mealDetails = NotificationDetails(
+      android: AndroidNotificationDetails(
+        _mealChannelId,
+        _mealChannelName,
+        channelDescription: _mealChannelDescription,
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+        icon: '@mipmap/ic_launcher',
+      ),
+    );
+
+    await _plugin.zonedSchedule(
+      id: _mealReminderId,
+      title: 'Giornata piena? 🍽️',
+      body: 'Dimmi in 10 secondi cosa hai mangiato oggi, al resto pensa l\'AI.',
+      scheduledDate: scheduled,
+      notificationDetails: mealDetails,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.time,
     );
   }
 }

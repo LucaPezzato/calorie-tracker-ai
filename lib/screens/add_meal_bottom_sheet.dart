@@ -17,7 +17,9 @@ class AddMealBottomSheet extends StatefulWidget {
   final String selectedDate;
   final UserProfile profile;
   final MealEntry? existingMeal;
+  final int initialMode;
   final void Function(MealEntry entry) onSaveMeal;
+  final ValueChanged<List<MealEntry>>? onSaveMultipleMeals;
   final VoidCallback? onDeleteMeal;
   final VoidCallback? onOpenMenuAdvisor;
 
@@ -26,7 +28,9 @@ class AddMealBottomSheet extends StatefulWidget {
     required this.selectedDate,
     required this.profile,
     this.existingMeal,
+    this.initialMode = 0,
     required this.onSaveMeal,
+    this.onSaveMultipleMeals,
     this.onDeleteMeal,
     this.onOpenMenuAdvisor,
   });
@@ -51,12 +55,15 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
   String? _localPhotoPath;
   Uint8List? _selectedImageBytes;
   bool _isAnalyzing = false;
+  bool _isFullDayMode = false;
   String? _errorMessage;
   late List<MealItem> _items;
+  List<MealEntry> _fullDayMeals = [];
 
   @override
   void initState() {
     super.initState();
+    _selectedMode = widget.initialMode;
     final existing = widget.existingMeal;
     if (existing != null) {
       _mealId = existing.id;
@@ -73,6 +80,11 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
       _mealTitle = '';
       _promptCtrl = TextEditingController();
       _items = [];
+      if (widget.initialMode == 1) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _pickPhoto(ImageSource.camera);
+        });
+      }
     }
   }
 
@@ -88,30 +100,33 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
   double get _totalC => _items.fold(0.0, (s, i) => s + i.carbsG);
   double get _totalG => _items.fold(0.0, (s, i) => s + i.fatG);
 
+  Future<void> _pickPhoto(ImageSource source) async {
+    final xfile = await _picker.pickImage(
+      source: source,
+      imageQuality: 80,
+    );
+    if (xfile != null) {
+      final bytes = await xfile.readAsBytes();
+      final supportDir = await getApplicationSupportDirectory();
+      final photosDir = Directory(p.join(supportDir.path, 'meal_photos'));
+      if (!photosDir.existsSync()) {
+        photosDir.createSync(recursive: true);
+      }
+      final savedPath = p.join(photosDir.path, '$_mealId.jpg');
+      await File(savedPath).writeAsBytes(bytes);
+      if (!mounted) return;
+      setState(() {
+        _selectedImageBytes = bytes;
+        _localPhotoPath = savedPath;
+        _errorMessage = null;
+      });
+    }
+  }
+
   Future<void> _onModeChanged(int mode) async {
     setState(() => _selectedMode = mode);
     if (mode == 1) {
-      // Foto mode: pick image and store locally only (not synced to Drive)
-      final xfile = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-      );
-      if (xfile != null) {
-        final bytes = await xfile.readAsBytes();
-        final supportDir = await getApplicationSupportDirectory();
-        final photosDir = Directory(p.join(supportDir.path, 'meal_photos'));
-        if (!photosDir.existsSync()) {
-          photosDir.createSync(recursive: true);
-        }
-        final savedPath = p.join(photosDir.path, '$_mealId.jpg');
-        await File(savedPath).writeAsBytes(bytes);
-        if (!mounted) return;
-        setState(() {
-          _selectedImageBytes = bytes;
-          _localPhotoPath = savedPath;
-          _errorMessage = null;
-        });
-      }
+      await _pickPhoto(ImageSource.gallery);
     } else if (mode == 2) {
       // Barcode mode: open live camera / EAN dialog
       final scannedItem = await showDialog<MealItem>(
@@ -152,27 +167,51 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
       _errorMessage = null;
     });
     try {
-      final result = await _aiService.analyzeMeal(
-        provider: creds.provider,
-        modelName: creds.modelName,
-        apiKey: creds.apiKey,
-        mealId: _mealId,
-        userPrompt: _promptCtrl.text,
-        imageBytes: _selectedImageBytes,
-      );
-      if (!mounted) return;
-      if (result.items.isEmpty) {
+      if (_isFullDayMode && _selectedImageBytes == null) {
+        final meals = await _aiService.analyzeFullDayMeals(
+          provider: creds.provider,
+          modelName: creds.modelName,
+          apiKey: creds.apiKey,
+          date: widget.selectedDate,
+          userPrompt: _promptCtrl.text,
+        );
+        if (!mounted) return;
+        if (meals.isEmpty) {
+          setState(() {
+            _errorMessage =
+                'Non sono riuscito a individuare i pasti. Prova es. "Colazione brioche, pranzo pasta al pesto, cena pizza".';
+          });
+          return;
+        }
         setState(() {
-          _errorMessage =
-              'Nessun alimento riconosciuto. Prova a descrivere meglio (es. "80g pasta, 100g tonno").';
+          _fullDayMeals = meals;
+          _items = [];
+          _errorMessage = null;
         });
-        return;
+      } else {
+        final result = await _aiService.analyzeMeal(
+          provider: creds.provider,
+          modelName: creds.modelName,
+          apiKey: creds.apiKey,
+          mealId: _mealId,
+          userPrompt: _promptCtrl.text,
+          imageBytes: _selectedImageBytes,
+        );
+        if (!mounted) return;
+        if (result.items.isEmpty) {
+          setState(() {
+            _errorMessage =
+                'Nessun alimento riconosciuto. Prova a descrivere meglio (es. "80g pasta, 100g tonno").';
+          });
+          return;
+        }
+        setState(() {
+          _mealTitle = result.mealTitle;
+          _items = result.items;
+          _fullDayMeals = [];
+          _errorMessage = null;
+        });
       }
-      setState(() {
-        _mealTitle = result.mealTitle;
-        _items = result.items;
-        _errorMessage = null;
-      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -342,6 +381,31 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
             ),
             const SizedBox(height: 14),
 
+            if (widget.existingMeal == null &&
+                widget.onSaveMultipleMeals != null &&
+                _selectedImageBytes == null) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilterChip(
+                  avatar: Icon(
+                    Symbols.auto_stories_rounded,
+                    size: 16,
+                    color: _isFullDayMode ? cs.onSecondaryContainer : cs.primary,
+                  ),
+                  label: const Text('Racconta tutta la giornata (multi-pasto)'),
+                  selected: _isFullDayMode,
+                  onSelected: (v) {
+                    setState(() {
+                      _isFullDayMode = v;
+                      _fullDayMeals = [];
+                      _errorMessage = null;
+                    });
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+
             if (_selectedImageBytes != null) ...[
               Container(
                 margin: const EdgeInsets.only(bottom: 10),
@@ -410,7 +474,9 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
                 fillColor: cs.surfaceDim,
                 hintText: _selectedImageBytes != null
                     ? 'Aggiungi note sulla foto (es. senza olio, metà porzione)...'
-                    : 'Descrivi gli alimenti (es. 80g pasta, 100g tonno)...',
+                    : _isFullDayMode
+                        ? 'Es. Stamattina cappuccino e brioche, pranzo pasta al pesto, cena pizza...'
+                        : 'Descrivi gli alimenti (es. 80g pasta, 100g tonno)...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                 ),
@@ -820,54 +886,217 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
               const SizedBox(height: 8),
             ],
 
-            // Save CTA Button
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-                backgroundColor: _items.isEmpty && widget.existingMeal != null
-                    ? cs.error
-                    : null,
-                foregroundColor: _items.isEmpty && widget.existingMeal != null
-                    ? cs.onError
-                    : null,
-                shape: const StadiumBorder(),
+            // Save CTA Button / Multi-meal Preview / Quick Estimate
+            if (_fullDayMeals.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Pasti riconosciuti (${_fullDayMeals.length})',
+                      style: tt.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    ..._fullDayMeals.map(
+                      (m) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Text(
+                              m.loggedAt,
+                              style: tt.labelSmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${m.title} (${m.items.map((i) => i.name).join(', ')})',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: tt.bodySmall,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${m.totalKcal} kcal',
+                              style: tt.labelSmall?.copyWith(
+                                color: cs.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              onPressed: _items.isEmpty && widget.existingMeal == null
-                  ? null
-                  : () {
-                      if (_items.isEmpty) {
-                        if (widget.existingMeal != null &&
-                            widget.onDeleteMeal != null) {
-                          widget.onDeleteMeal!();
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  shape: const StadiumBorder(),
+                ),
+                onPressed: () {
+                  widget.onSaveMultipleMeals?.call(_fullDayMeals);
+                  Navigator.of(context).pop();
+                },
+                icon: const Icon(Symbols.done_all_rounded),
+                label: Text('Salva tutti i pasti (${_fullDayMeals.length})'),
+              ),
+            ] else ...[
+              if (_items.isEmpty && widget.existingMeal == null && !_isFullDayMode) ...[
+                Text(
+                  'Stima rapida senza ingredienti',
+                  style: tt.labelMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () =>
+                            _saveQuickEstimate('Pasto leggero', 500, 25, 55, 18),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        child: const Column(
+                          children: [
+                            Text('Leggero', style: TextStyle(fontSize: 12)),
+                            Text('~500 kcal',
+                                style: TextStyle(
+                                    fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () =>
+                            _saveQuickEstimate('Pasto medio', 800, 40, 85, 30),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        child: const Column(
+                          children: [
+                            Text('Medio', style: TextStyle(fontSize: 12)),
+                            Text('~800 kcal',
+                                style: TextStyle(
+                                    fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () =>
+                            _saveQuickEstimate('Pasto abbondante', 1200, 50, 130, 48),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        child: const Column(
+                          children: [
+                            Text('Abbondante', style: TextStyle(fontSize: 12)),
+                            Text('~1200 kcal',
+                                style: TextStyle(
+                                    fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  backgroundColor: _items.isEmpty && widget.existingMeal != null
+                      ? cs.error
+                      : null,
+                  foregroundColor: _items.isEmpty && widget.existingMeal != null
+                      ? cs.onError
+                      : null,
+                  shape: const StadiumBorder(),
+                ),
+                onPressed: _items.isEmpty && widget.existingMeal == null
+                    ? null
+                    : () {
+                        if (_items.isEmpty) {
+                          if (widget.existingMeal != null &&
+                              widget.onDeleteMeal != null) {
+                            widget.onDeleteMeal!();
+                          }
+                          Navigator.of(context).pop();
+                          return;
                         }
+                        final entry = MealEntry(
+                          id: _mealId,
+                          date: widget.selectedDate,
+                          loggedAt: _loggedAtTime,
+                          title: _mealTitle.isEmpty ? 'Pasto' : _mealTitle,
+                          localPhotoPath: _localPhotoPath,
+                          items: _items,
+                        );
+                        widget.onSaveMeal(entry);
                         Navigator.of(context).pop();
-                        return;
-                      }
-                      final entry = MealEntry(
-                        id: _mealId,
-                        date: widget.selectedDate,
-                        loggedAt: _loggedAtTime,
-                        title: _mealTitle.isEmpty ? 'Pasto' : _mealTitle,
-                        localPhotoPath: _localPhotoPath,
-                        items: _items,
-                      );
-                      widget.onSaveMeal(entry);
-                      Navigator.of(context).pop();
-                    },
-              icon: Icon(
-                _items.isEmpty && widget.existingMeal != null
-                    ? Symbols.delete_rounded
-                    : Symbols.check_rounded,
+                      },
+                icon: Icon(
+                  _items.isEmpty && widget.existingMeal != null
+                      ? Symbols.delete_rounded
+                      : Symbols.check_rounded,
+                ),
+                label: Text(
+                  _items.isEmpty && widget.existingMeal != null
+                      ? 'Elimina pasto'
+                      : 'Salva pasto ($_loggedAtTime)',
+                ),
               ),
-              label: Text(
-                _items.isEmpty && widget.existingMeal != null
-                    ? 'Elimina pasto'
-                    : 'Salva pasto ($_loggedAtTime)',
-              ),
-            ),
+            ],
           ],
         );
       },
     );
+  }
+
+  void _saveQuickEstimate(
+    String title,
+    int kcal,
+    double proteinG,
+    double carbsG,
+    double fatG,
+  ) {
+    final item = MealItem(
+      id: _uuid.v4(),
+      mealId: _mealId,
+      name: '$title (stima rapida)',
+      grams: 100,
+      kcalPer100g: kcal.toDouble(),
+      proteinPer100g: proteinG,
+      carbsPer100g: carbsG,
+      fatPer100g: fatG,
+      fiberPer100g: 4,
+      source: MealItemSource.manual,
+    );
+    final entry = MealEntry(
+      id: _mealId,
+      date: widget.selectedDate,
+      loggedAt: _loggedAtTime,
+      title: title,
+      items: [item],
+    );
+    widget.onSaveMeal(entry);
+    Navigator.of(context).pop();
   }
 }

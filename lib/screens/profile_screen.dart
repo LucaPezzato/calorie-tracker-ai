@@ -140,6 +140,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       waterReminderEndMinutes: widget.profile.waterReminderEndMinutes,
       waterReminderIntervalMinutes:
           widget.profile.waterReminderIntervalMinutes,
+      mealReminderEnabled: widget.profile.mealReminderEnabled,
+      mealReminderMinutes: widget.profile.mealReminderMinutes,
     );
     widget.onProfileChanged(updated);
   }
@@ -357,6 +359,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   waterReminderStartMinutes: p.waterReminderStartMinutes,
                   waterReminderEndMinutes: p.waterReminderEndMinutes,
                   waterReminderIntervalMinutes: p.waterReminderIntervalMinutes,
+                  mealReminderEnabled: p.mealReminderEnabled,
+                  mealReminderMinutes: p.mealReminderMinutes,
                 ),
               );
               Navigator.pop(ctx);
@@ -1308,6 +1312,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         waterReminderEndMinutes: p.waterReminderEndMinutes,
                         waterReminderIntervalMinutes:
                             p.waterReminderIntervalMinutes,
+                        mealReminderEnabled: p.mealReminderEnabled,
+                        mealReminderMinutes: p.mealReminderMinutes,
                       ),
                     );
                     _loadStoredKey();
@@ -1503,7 +1509,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _updateWaterReminder(UserProfile updated) async {
-    if (updated.waterReminderEnabled) {
+    if (updated.waterReminderEnabled || updated.mealReminderEnabled) {
       final granted = await WaterReminderService.instance.requestPermission();
       if (!granted && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1519,6 +1525,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     widget.onProfileChanged(updated);
     await LocalDatabase.instance.saveUserProfile(updated);
     await WaterReminderService.instance.syncSchedule(updated);
+    final todayStr = DateTime.now().toIso8601String().split('T').first;
+    final todayMeals = await LocalDatabase.instance.getMealsForDate(todayStr);
+    await WaterReminderService.instance.syncMealReminder(
+      profile: updated,
+      todayMealsCount: todayMeals.length,
+    );
+  }
+
+  Future<void> _pickMealReminderTime(UserProfile profile) async {
+    final initial = TimeOfDay(
+      hour: profile.mealReminderMinutes ~/ 60,
+      minute: profile.mealReminderMinutes % 60,
+    );
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+      helpText: 'Orario promemoria serale pasti',
+    );
+    if (picked == null) return;
+    await _updateWaterReminder(
+      profile.copyWith(mealReminderMinutes: picked.hour * 60 + picked.minute),
+    );
   }
 
   Future<void> _pickReminderTime({
@@ -1729,6 +1757,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   icon: const Icon(Symbols.notifications_active_rounded,
                       size: 18),
                   label: const Text('Invia notifica di test'),
+                ),
+              ),
+            ],
+            const Divider(height: 24),
+            Row(
+              children: [
+                Icon(
+                  Symbols.restaurant_rounded,
+                  color: cs.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Promemoria Serale Pasti',
+                    style: tt.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Switch(
+                  value: p.mealReminderEnabled,
+                  onChanged: (enabled) => _updateWaterReminder(
+                    p.copyWith(mealReminderEnabled: enabled),
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              p.mealReminderEnabled
+                  ? 'Alle ${WaterReminderService.formatMinutes(p.mealReminderMinutes)} solo se oggi hai registrato 0 o 1 pasto.'
+                  : 'Avviso discreto la sera solo nei giorni in cui non hai ancora registrato i pasti.',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            if (p.mealReminderEnabled) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => _pickMealReminderTime(p),
+                icon: const Icon(Symbols.schedule_rounded, size: 17),
+                label: Text(
+                  'Orario avviso: ${WaterReminderService.formatMinutes(p.mealReminderMinutes)}',
                 ),
               ),
             ],

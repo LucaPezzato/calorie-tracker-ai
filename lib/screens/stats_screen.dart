@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../data/local_database.dart';
@@ -28,6 +29,8 @@ class _StatsScreenState extends State<StatsScreen> {
   bool _isLoading = true;
   bool _hasGlobalData = false;
   List<DailyStatEntry> _entries = [];
+  ({int activeDays, int totalKcal, int daysElapsed}) _weeklyConsistency =
+      (activeDays: 0, totalKcal: 0, daysElapsed: 1);
 
   // Calendar state
   late int _calYear;
@@ -57,6 +60,8 @@ class _StatsScreenState extends State<StatsScreen> {
   Future<void> _loadStats() async {
     final hasData = await LocalDatabase.instance.hasAnyLoggedData();
     final entries = await LocalDatabase.instance.getHistoricalStats(_selectedRange);
+    final todayStr = DateTime.now().toIso8601String().split('T').first;
+    final weekly = await LocalDatabase.instance.getWeeklyConsistency(todayStr);
     final monthStats = await LocalDatabase.instance.getMonthStats(_calYear, _calMonth);
     final aiDates = await LocalDatabase.instance.getDatesWithAiSummary(_calYear, _calMonth);
     final dayMeals = await LocalDatabase.instance.getMealsForDate(_selectedCalendarDate);
@@ -65,6 +70,7 @@ class _StatsScreenState extends State<StatsScreen> {
     setState(() {
       _hasGlobalData = hasData;
       _entries = entries;
+      _weeklyConsistency = weekly;
       _monthStats = monthStats;
       _monthAiSummaryDates = aiDates;
       _selectedDayMeals = dayMeals;
@@ -289,6 +295,8 @@ class _StatsScreenState extends State<StatsScreen> {
           ),
         )
       else ...[
+        _buildWeeklyConsistencyCard(cs, tt, nutrients),
+        const SizedBox(height: 14),
         _buildCaloriesCard(cs, tt, nutrients),
         const SizedBox(height: 12),
         _buildNutrientsCard(cs, tt, nutrients),
@@ -994,27 +1002,50 @@ class _StatsScreenState extends State<StatsScreen> {
         .map((e) => e.weightKg!)
         .toList();
 
+    // Exponential / moving average trend curve to smooth daily fluctuations
+    final trendWeights = <double>[];
+    for (int i = 0; i < loggedWeights.length; i++) {
+      if (i == 0) {
+        trendWeights.add(loggedWeights[0]);
+      } else {
+        trendWeights.add((trendWeights[i - 1] * 0.65) + (loggedWeights[i] * 0.35));
+      }
+    }
+
     final String badgeText;
     final Color badgeColor;
     final String currentWeightText;
     final String explanationText;
 
     if (loggedWeights.length >= 2) {
-      final delta = loggedWeights.last - loggedWeights.first;
-      badgeText = '${delta >= 0 ? '+' : ''}${delta.toStringAsFixed(1)} kg (${_selectedRange}gg)';
+      final delta = trendWeights.last - trendWeights.first;
+      badgeText = '${delta >= 0 ? '+' : ''}${delta.toStringAsFixed(1)} kg trend';
       badgeColor = delta <= 0 ? nutrients.fiber : nutrients.carbs;
-      currentWeightText = '${loggedWeights.last.toStringAsFixed(1)} kg';
-      explanationText = 'Variazione peso registrata negli ultimi $_selectedRange giorni.';
+      currentWeightText =
+          '${loggedWeights.last.toStringAsFixed(1)} kg  (Trend: ${trendWeights.last.toStringAsFixed(1)} kg)';
+      explanationText =
+          'Curva di trend (media mobile) su ${loggedWeights.length} pesate negli ultimi $_selectedRange giorni.';
     } else if (loggedWeights.length == 1) {
       badgeText = '1 pesata';
       badgeColor = cs.primary;
       currentWeightText = '${loggedWeights.first.toStringAsFixed(1)} kg';
-      explanationText = 'Registra altre pesate per visualizzare la variazione nel tempo.';
+      explanationText = 'Registra 2–3 pesate a settimana per visualizzare il trend smussato.';
     } else {
       badgeText = 'Nessuna pesata';
       badgeColor = cs.onSurfaceVariant;
       currentWeightText = '${widget.profile.currentWeightKg.toStringAsFixed(1)} kg';
       explanationText = 'Nessuna pesata registrata negli ultimi $_selectedRange giorni.';
+    }
+
+    double minW = 0;
+    double maxW = 100;
+    if (loggedWeights.isNotEmpty) {
+      minW = loggedWeights.reduce(min) - 1.0;
+      maxW = loggedWeights.reduce(max) + 1.0;
+      if ((maxW - minW) < 2.0) {
+        minW -= 1.0;
+        maxW += 1.0;
+      }
     }
 
     return Card(
@@ -1048,7 +1079,7 @@ class _StatsScreenState extends State<StatsScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            Text(currentWeightText, style: tt.headlineSmall),
+            Text(currentWeightText, style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text(
               explanationText,
@@ -1056,6 +1087,150 @@ class _StatsScreenState extends State<StatsScreen> {
                 fontSize: 12,
                 color: cs.onSurfaceVariant,
               ),
+            ),
+            if (loggedWeights.length >= 2) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 130,
+                child: LineChart(
+                  LineChartData(
+                    minY: minW,
+                    maxY: maxW,
+                    gridData: const FlGridData(show: false),
+                    titlesData: const FlTitlesData(show: false),
+                    borderData: FlBorderData(show: false),
+                    lineBarsData: [
+                      // Real weigh-in dots (subtle)
+                      LineChartBarData(
+                        spots: List.generate(
+                          loggedWeights.length,
+                          (i) => FlSpot(i.toDouble(), loggedWeights[i]),
+                        ),
+                        isCurved: false,
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.35),
+                        barWidth: 1.5,
+                        dotData: const FlDotData(show: true),
+                      ),
+                      // Smoothed trend curve
+                      LineChartBarData(
+                        spots: List.generate(
+                          trendWeights.length,
+                          (i) => FlSpot(i.toDouble(), trendWeights[i]),
+                        ),
+                        isCurved: true,
+                        color: cs.primary,
+                        barWidth: 3,
+                        dotData: const FlDotData(show: false),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          color: cs.primary.withValues(alpha: 0.12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWeeklyConsistencyCard(
+    ColorScheme cs,
+    TextTheme tt,
+    NutrientColors nutrients,
+  ) {
+    final active = _weeklyConsistency.activeDays;
+    final weeklyTargetKcal = widget.profile.targetKcal * 7;
+    final weeklyConsumed = _weeklyConsistency.totalKcal;
+    final remainingWeekly = (weeklyTargetKcal - weeklyConsumed).clamp(0, weeklyTargetKcal);
+    final daysLeft = (7 - _weeklyConsistency.daysElapsed + 1).clamp(1, 7);
+    final suggestedPerDay = (remainingWeekly / daysLeft).round();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Costanza Settimanale',
+                    style: tt.titleLarge,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: active >= 5
+                        ? nutrients.fiber.withValues(alpha: 0.18)
+                        : cs.primaryContainer,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$active/5 giorni (+2 jolly)',
+                    style: tt.labelSmall?.copyWith(
+                      color: active >= 5 ? nutrients.fiber : cs.onPrimaryContainer,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Obiettivo flessibile: 5 giorni attivi su 7 (2 giorni jolly inclusi per imprevisti).',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: (active / 5.0).clamp(0.0, 1.0),
+                minHeight: 8,
+                backgroundColor: cs.surfaceDim,
+                color: active >= 5 ? nutrients.fiber : cs.primary,
+              ),
+            ),
+            const Divider(height: 22),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Budget Calorico Settimanale',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  '$weeklyConsumed / $weeklyTargetKcal kcal',
+                  style: tt.labelMedium?.copyWith(
+                    color: cs.primary,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: weeklyTargetKcal > 0
+                    ? (weeklyConsumed / weeklyTargetKcal).clamp(0.0, 1.0)
+                    : 0.0,
+                minHeight: 8,
+                backgroundColor: cs.surfaceDim,
+                color: weeklyConsumed > weeklyTargetKcal
+                    ? nutrients.carbs
+                    : cs.primary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Restano $remainingWeekly kcal su $daysLeft gg (~$suggestedPerDay kcal/giorno).',
+              style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
             ),
           ],
         ),
