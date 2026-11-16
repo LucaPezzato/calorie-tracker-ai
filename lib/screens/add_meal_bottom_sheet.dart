@@ -51,6 +51,7 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
   String? _localPhotoPath;
   Uint8List? _selectedImageBytes;
   bool _isAnalyzing = false;
+  String? _errorMessage;
   late List<MealItem> _items;
 
   @override
@@ -127,12 +128,12 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
   }
 
   Future<void> _runAiAnalysis() async {
+    FocusScope.of(context).unfocus();
     if (_promptCtrl.text.trim().isEmpty && _selectedImageBytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Scrivi cosa hai mangiato o scatta una foto prima di analizzare.'),
-        ),
-      );
+      setState(() {
+        _errorMessage =
+            'Scrivi cosa hai mangiato o scatta una foto prima di analizzare.';
+      });
       return;
     }
 
@@ -141,17 +142,17 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
     );
     if (apiKey == null || apiKey.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Inserisci prima la tua API Key Gemini/OpenAI nella tab Profilo!',
-          ),
-        ),
-      );
+      setState(() {
+        _errorMessage =
+            'API Key ${widget.profile.preferredAiProvider == AiProviderType.gemini ? 'Gemini' : 'OpenAI'} mancante! Inseriscila nella tab Profilo.';
+      });
       return;
     }
 
-    setState(() => _isAnalyzing = true);
+    setState(() {
+      _isAnalyzing = true;
+      _errorMessage = null;
+    });
     try {
       final result = await _aiService.analyzeMeal(
         provider: widget.profile.preferredAiProvider,
@@ -162,21 +163,30 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
         imageBytes: _selectedImageBytes,
       );
       if (!mounted) return;
+      if (result.items.isEmpty) {
+        setState(() {
+          _errorMessage =
+              'Nessun alimento riconosciuto. Prova a descrivere meglio (es. "80g pasta, 100g tonno").';
+        });
+        return;
+      }
       setState(() {
         _mealTitle = result.mealTitle;
         _items = result.items;
+        _errorMessage = null;
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Errore analisi AI: $e')));
+      setState(() {
+        _errorMessage = 'Errore analisi AI: $e';
+      });
     } finally {
       if (mounted) setState(() => _isAnalyzing = false);
     }
   }
 
   Future<void> _runAiRefinement() async {
+    FocusScope.of(context).unfocus();
     final text = _refineCtrl.text.trim();
     if (text.isEmpty) return;
 
@@ -185,17 +195,17 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
     );
     if (apiKey == null || apiKey.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Configura la API Key nella tab Profilo per usare "Correggi con AI".',
-          ),
-        ),
-      );
+      setState(() {
+        _errorMessage =
+            'Configura la API Key nella tab Profilo per usare "Correggi con AI".';
+      });
       return;
     }
 
-    setState(() => _isAnalyzing = true);
+    setState(() {
+      _isAnalyzing = true;
+      _errorMessage = null;
+    });
     try {
       final result = await _aiService.refineMealWithAi(
         provider: widget.profile.preferredAiProvider,
@@ -213,12 +223,13 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
         _mealTitle = result.mealTitle;
         _items = result.items;
         _refineCtrl.clear();
+        _errorMessage = null;
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Errore correzione AI: $e')));
+      setState(() {
+        _errorMessage = 'Errore correzione AI: $e';
+      });
     } finally {
       if (mounted) setState(() => _isAnalyzing = false);
     }
@@ -339,6 +350,9 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
             TextField(
               controller: _promptCtrl,
               maxLines: 2,
+              minLines: 1,
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) => _isAnalyzing ? null : _runAiAnalysis(),
               decoration: InputDecoration(
                 filled: true,
                 fillColor: cs.surfaceDim,
@@ -357,14 +371,74 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
                       )
                     : IconButton(
                         icon: Icon(
-                          Symbols.arrow_forward_rounded,
+                          Symbols.auto_awesome_rounded,
                           color: cs.primary,
                         ),
                         onPressed: _runAiAnalysis,
-                        tooltip: 'Analizza alimenti',
+                        tooltip: 'Analizza alimenti con AI',
                       ),
               ),
             ),
+            if (_items.isEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.tonalIcon(
+                  onPressed: _isAnalyzing ? null : _runAiAnalysis,
+                  icon: _isAnalyzing
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Symbols.auto_awesome_rounded, size: 18),
+                  label: Text(
+                    _isAnalyzing ? 'Analisi AI in corso...' : 'Analizza pasto con AI',
+                  ),
+                ),
+              ),
+            ],
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: cs.errorContainer,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Symbols.error_rounded,
+                      color: cs.onErrorContainer,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onErrorContainer,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: Icon(
+                        Symbols.close_rounded,
+                        size: 16,
+                        color: cs.onErrorContainer,
+                      ),
+                      onPressed: () => setState(() => _errorMessage = null),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
 
             // Live Recalculated Total Banner

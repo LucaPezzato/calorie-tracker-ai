@@ -275,19 +275,21 @@ Non aggiungere markdown o testo fuori dal JSON.
       final uri = Uri.parse(
         'https://generativelanguage.googleapis.com/v1beta/models/$candidate:generateContent?key=$cleanKey',
       );
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'contents': [
-            {'role': 'user', 'parts': parts},
-          ],
-          'generationConfig': {
-            'temperature': 0.2,
-            'responseMimeType': 'application/json',
-          },
-        }),
-      );
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'contents': [
+                {'role': 'user', 'parts': parts},
+              ],
+              'generationConfig': {
+                'temperature': 0.2,
+                'responseMimeType': 'application/json',
+              },
+            }),
+          )
+          .timeout(const Duration(seconds: 25));
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body) as Map<String, dynamic>;
@@ -310,6 +312,7 @@ Non aggiungere markdown o testo fuori dal JSON.
         }
         final text = buffer.toString().trim();
         if (text.isNotEmpty) return text;
+        lastError = 'Risposta vuota dal modello $candidate';
       } else {
         // Parse Google API error message if present
         try {
@@ -351,25 +354,27 @@ Non aggiungere markdown o testo fuori dal JSON.
       });
     }
 
-    final response = await http.post(
-      Uri.parse('https://api.openai.com/v1/chat/completions'),
-      headers: {
-        'Authorization': 'Bearer $cleanKey',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'model': modelName,
-        'response_format': {'type': 'json_object'},
-        'temperature': 0.2,
-        'messages': [
-          {
-            'role': 'system',
-            'content': customSystemPrompt ?? _systemPrompt,
+    final response = await http
+        .post(
+          Uri.parse('https://api.openai.com/v1/chat/completions'),
+          headers: {
+            'Authorization': 'Bearer $cleanKey',
+            'Content-Type': 'application/json',
           },
-          {'role': 'user', 'content': userContent},
-        ],
-      }),
-    );
+          body: jsonEncode({
+            'model': modelName,
+            'response_format': {'type': 'json_object'},
+            'temperature': 0.2,
+            'messages': [
+              {
+                'role': 'system',
+                'content': customSystemPrompt ?? _systemPrompt,
+              },
+              {'role': 'user', 'content': userContent},
+            ],
+          }),
+        )
+        .timeout(const Duration(seconds: 25));
 
     if (response.statusCode != 200) {
       throw Exception(
