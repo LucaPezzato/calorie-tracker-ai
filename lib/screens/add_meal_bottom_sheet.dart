@@ -109,8 +109,8 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
         setState(() {
           _selectedImageBytes = bytes;
           _localPhotoPath = savedPath;
+          _errorMessage = null;
         });
-        await _runAiAnalysis();
       }
     } else if (mode == 2) {
       // Barcode mode: open live camera / EAN dialog
@@ -346,6 +346,62 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
             ),
             const SizedBox(height: 14),
 
+            if (_selectedImageBytes != null) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: cs.surfaceDim,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                  border: Border.all(
+                    color: cs.outlineVariant.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(
+                        _selectedImageBytes!,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Foto allegata',
+                            style: tt.labelLarge,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Puoi aggiungere note sotto prima di premere Analizza.',
+                            style: tt.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Rimuovi foto',
+                      onPressed: () {
+                        setState(() {
+                          _selectedImageBytes = null;
+                          _localPhotoPath = null;
+                        });
+                      },
+                      icon: const Icon(Symbols.close_rounded, size: 18),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             // Prompt Box
             TextField(
               controller: _promptCtrl,
@@ -356,7 +412,9 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
               decoration: InputDecoration(
                 filled: true,
                 fillColor: cs.surfaceDim,
-                hintText: 'Descrivi gli alimenti (es. 80g pasta, 100g tonno)...',
+                hintText: _selectedImageBytes != null
+                    ? 'Aggiungi note sulla foto (es. senza olio, metà porzione)...'
+                    : 'Descrivi gli alimenti (es. 80g pasta, 100g tonno)...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                 ),

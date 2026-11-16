@@ -38,6 +38,7 @@ class _MenuAdvisorDialogState extends State<MenuAdvisorDialog> {
   int _inputMode = 0; // 0 = Link, 1 = Testo, 2 = Foto
   final TextEditingController _urlCtrl = TextEditingController();
   final TextEditingController _textCtrl = TextEditingController();
+  final TextEditingController _preferencesCtrl = TextEditingController();
   Uint8List? _imageBytes;
   String? _imageFileName;
 
@@ -49,6 +50,7 @@ class _MenuAdvisorDialogState extends State<MenuAdvisorDialog> {
   void dispose() {
     _urlCtrl.dispose();
     _textCtrl.dispose();
+    _preferencesCtrl.dispose();
     super.dispose();
   }
 
@@ -105,6 +107,7 @@ class _MenuAdvisorDialogState extends State<MenuAdvisorDialog> {
         apiKey: key,
         menuUrl: _inputMode == 0 ? url : null,
         menuText: _inputMode == 1 ? text : null,
+        userPreferences: _preferencesCtrl.text.trim(),
         menuImageBytes: _inputMode == 2 ? _imageBytes : null,
         remainingKcal: widget.remainingKcal,
         remainingProteinG: widget.remainingProteinG,
@@ -361,6 +364,24 @@ class _MenuAdvisorDialogState extends State<MenuAdvisorDialog> {
               ),
             ),
           ],
+
+          const SizedBox(height: 14),
+          TextField(
+            controller: _preferencesCtrl,
+            maxLines: 2,
+            minLines: 1,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: cs.surfaceDim,
+              labelText: 'Note o cose da evitare per l\'AI (opzionale)',
+              hintText:
+                  'Es. Non mi piacciono funghi e formaggi, evita fritture, preferisco pesce...',
+              prefixIcon: const Icon(Symbols.tune_rounded),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+              ),
+            ),
+          ),
 
           if (_errorMessage != null) ...[
             const SizedBox(height: 12),

@@ -427,6 +427,7 @@ Non aggiungere markdown o testo fuori dal JSON.
     required String apiKey,
     String? menuText,
     String? menuUrl,
+    String? userPreferences,
     Uint8List? menuImageBytes,
     required int remainingKcal,
     required double remainingProteinG,
@@ -452,6 +453,15 @@ Non aggiungere markdown o testo fuori dal JSON.
     promptBuffer.writeln('- Proteine mancanti: ${remainingProteinG.round()} g');
     promptBuffer.writeln('- Carboidrati mancanti: ${remainingCarbsG.round()} g');
     promptBuffer.writeln('- Grassi rimanenti: ${remainingFatG.round()} g');
+    if (userPreferences != null && userPreferences.trim().isNotEmpty) {
+      promptBuffer.writeln(
+        '\nPREFERENZE, GUSTI E COSE DA EVITARE INDICATE DALL\'UTENTE (RISPETTA RIGOROSAMENTE):',
+      );
+      promptBuffer.writeln(userPreferences.trim());
+      promptBuffer.writeln(
+        'Escludi dalle raccomandazioni qualsiasi piatto che contenga ingredienti non graditi o contrari a queste indicazioni.',
+      );
+    }
     promptBuffer.writeln('\nMENU DEL RISTORANTE DA ANALIZZARE:\n');
     promptBuffer.writeln(
       menuContent.isNotEmpty
