@@ -88,9 +88,8 @@ class _DailyAiSummarySheetState extends State<DailyAiSummarySheet> {
   }
 
   Future<void> _generateAndSave() async {
-    final apiKey =
-        await _keysService.getApiKey(widget.profile.preferredAiProvider);
-    if (apiKey == null || apiKey.isEmpty) {
+    final creds = await _keysService.resolveActiveCredentials(widget.profile);
+    if (creds == null) {
       if (!mounted) return;
       setState(() {
         _error =
@@ -106,9 +105,9 @@ class _DailyAiSummarySheetState extends State<DailyAiSummarySheet> {
 
     try {
       final result = await _aiService.generateDailySummary(
-        provider: widget.profile.preferredAiProvider,
-        modelName: widget.profile.preferredAiModel,
-        apiKey: apiKey,
+        provider: creds.provider,
+        modelName: creds.modelName,
+        apiKey: creds.apiKey,
         date: widget.date,
         profile: widget.profile,
         meals: _meals,

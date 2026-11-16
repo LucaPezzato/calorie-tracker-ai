@@ -5,12 +5,18 @@ import '../data/local_database.dart';
 import '../models/nutrition_models.dart';
 import '../theme/app_theme.dart';
 import '../theme/nutrient_colors.dart';
+import 'add_meal_bottom_sheet.dart';
 import 'daily_ai_summary_sheet.dart';
 
 class StatsScreen extends StatefulWidget {
   final UserProfile profile;
+  final VoidCallback? onDataChanged;
 
-  const StatsScreen({super.key, required this.profile});
+  const StatsScreen({
+    super.key,
+    required this.profile,
+    this.onDataChanged,
+  });
 
   @override
   State<StatsScreen> createState() => _StatsScreenState();
@@ -557,68 +563,130 @@ class _StatsScreenState extends State<StatsScreen> {
                 )
               else
                 ..._selectedDayMeals.map(
-                  (m) => Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
+                  (m) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Material(
                       color: cs.surfaceDim,
                       borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          m.loggedAt,
-                          style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                        onTap: () => _openMealEditor(
+                          _selectedCalendarDate,
+                          existingMeal: m,
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            m.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                m.loggedAt,
+                                style: tt.labelSmall?.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  m.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: tt.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${m.totalKcal} kcal',
+                                style: tt.labelMedium?.copyWith(
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(
+                                Symbols.edit_rounded,
+                                size: 15,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${m.totalKcal} kcal',
-                          style: tt.labelMedium?.copyWith(
-                            color: cs.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
 
               const SizedBox(height: 8),
-              FilledButton.tonalIcon(
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(46),
-                  shape: const StadiumBorder(),
-                ),
-                onPressed: () async {
-                  await DailyAiSummarySheet.show(
-                    context,
-                    date: _selectedCalendarDate,
-                    profile: widget.profile,
-                    meals: _selectedDayMeals,
-                  );
-                  _loadStats();
-                },
-                icon: const Icon(Symbols.auto_awesome_rounded, size: 18),
-                label: Text(
-                  hasSavedAi
-                      ? 'Vedi Resoconto AI salvato'
-                      : 'Genera Resoconto AI del giorno',
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(44),
+                        shape: const StadiumBorder(),
+                      ),
+                      onPressed: () => _openMealEditor(_selectedCalendarDate),
+                      icon: const Icon(Symbols.add_rounded, size: 18),
+                      label: const Text('Aggiungi pasto'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(44),
+                        shape: const StadiumBorder(),
+                      ),
+                      onPressed: () async {
+                        await DailyAiSummarySheet.show(
+                          context,
+                          date: _selectedCalendarDate,
+                          profile: widget.profile,
+                          meals: _selectedDayMeals,
+                        );
+                        _loadStats();
+                      },
+                      icon: const Icon(Symbols.auto_awesome_rounded, size: 18),
+                      label: Text(
+                        hasSavedAi ? 'Resoconto AI' : 'Genera AI',
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
       ),
     ];
+  }
+
+  Future<void> _openMealEditor(String date, {MealEntry? existingMeal}) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => AddMealBottomSheet(
+        selectedDate: date,
+        profile: widget.profile,
+        existingMeal: existingMeal,
+        onDeleteMeal: existingMeal != null
+            ? () async {
+                await LocalDatabase.instance.deleteMealEntry(existingMeal.id);
+                await _loadStats();
+                widget.onDataChanged?.call();
+              }
+            : null,
+        onSaveMeal: (entry) async {
+          await LocalDatabase.instance.saveMealEntry(entry);
+          await _loadStats();
+          widget.onDataChanged?.call();
+        },
+      ),
+    );
   }
 
   Widget _buildDayMacroBar(

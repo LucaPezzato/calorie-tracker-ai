@@ -70,11 +70,11 @@ class _MenuAdvisorDialogState extends State<MenuAdvisorDialog> {
   }
 
   Future<void> _runAnalysis() async {
-    final key = await _keysService.getApiKey(widget.profile.preferredAiProvider);
-    if (key == null || key.isEmpty) {
+    final creds = await _keysService.resolveActiveCredentials(widget.profile);
+    if (creds == null) {
       setState(() {
         _errorMessage =
-            'Nessuna API Key configurata. Vai in Profilo e inserisci la tua chiave ${widget.profile.preferredAiProvider == AiProviderType.gemini ? "Gemini" : "OpenAI"}.';
+            'Nessuna API Key configurata. Vai in Profilo e inserisci la tua chiave Gemini o OpenAI.';
       });
       return;
     }
@@ -102,9 +102,9 @@ class _MenuAdvisorDialogState extends State<MenuAdvisorDialog> {
 
     try {
       final res = await _aiService.analyzeMenuAndRecommend(
-        provider: widget.profile.preferredAiProvider,
-        modelName: widget.profile.preferredAiModel,
-        apiKey: key,
+        provider: creds.provider,
+        modelName: creds.modelName,
+        apiKey: creds.apiKey,
         menuUrl: _inputMode == 0 ? url : null,
         menuText: _inputMode == 1 ? text : null,
         userPreferences: _preferencesCtrl.text.trim(),

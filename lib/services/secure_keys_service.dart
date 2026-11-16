@@ -89,4 +89,34 @@ class SecureKeysService {
     fallbackMap.remove(key);
     await _writeFallbackMap(fallbackMap);
   }
+
+  /// Resolves credentials for [profile.preferredAiProvider], falling back to the
+  /// other provider automatically if only one API key is configured.
+  Future<({AiProviderType provider, String modelName, String apiKey})?>
+      resolveActiveCredentials(UserProfile profile) async {
+    final primary = profile.preferredAiProvider;
+    final primaryKey = await getApiKey(primary);
+    if (primaryKey != null && primaryKey.isNotEmpty) {
+      return (
+        provider: primary,
+        modelName: profile.preferredAiModel,
+        apiKey: primaryKey,
+      );
+    }
+
+    final fallback = primary == AiProviderType.gemini
+        ? AiProviderType.openai
+        : AiProviderType.gemini;
+    final fallbackKey = await getApiKey(fallback);
+    if (fallbackKey != null && fallbackKey.isNotEmpty) {
+      return (
+        provider: fallback,
+        modelName: fallback == AiProviderType.gemini
+            ? 'gemini-2.5-flash'
+            : 'gpt-4o-mini',
+        apiKey: fallbackKey,
+      );
+    }
+    return null;
+  }
 }

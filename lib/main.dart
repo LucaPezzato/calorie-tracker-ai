@@ -65,11 +65,13 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
   final DriveBackupService _driveService = DriveBackupService();
   final FirebaseBackupService _firebaseService = FirebaseBackupService();
   int _selectedIndex = 0;
-  final String _todayDate = DateTime.now().toIso8601String().split('T').first;
+  String get _todayDate => DateTime.now().toIso8601String().split('T').first;
+  late String _selectedDate = _todayDate;
+  bool get _isViewingToday => _selectedDate == _todayDate;
 
   UserProfile _profile = const UserProfile();
   late DailyMetrics _metrics = DailyMetrics(
-    date: _todayDate,
+    date: _selectedDate,
     waterMl: 1500,
     weightKg: 74.2,
   );
@@ -127,10 +129,10 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
   }
 
   Future<void> _loadFromDatabase() async {
-    final meals = await LocalDatabase.instance.getMealsForDate(_todayDate);
-    final metrics = await LocalDatabase.instance.getDailyMetrics(_todayDate);
+    final meals = await LocalDatabase.instance.getMealsForDate(_selectedDate);
+    final metrics = await LocalDatabase.instance.getDailyMetrics(_selectedDate);
     final profile = await LocalDatabase.instance.getUserProfile();
-    final prevWeight = await LocalDatabase.instance.getPreviousLoggedWeight(_todayDate);
+    final prevWeight = await LocalDatabase.instance.getPreviousLoggedWeight(_selectedDate);
     if (!mounted) return;
     setState(() {
       _meals = meals;
@@ -139,12 +141,57 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
       _previousWeightKg = prevWeight;
       _dataVersion++;
     });
-    WidgetSyncService.syncTodayData(
-      profile: profile,
-      metrics: metrics,
-      meals: meals,
-    );
+    if (_isViewingToday) {
+      WidgetSyncService.syncTodayData(
+        profile: profile,
+        metrics: metrics,
+        meals: meals,
+      );
+    }
     WaterReminderService.instance.syncSchedule(profile);
+  }
+
+  void _shiftSelectedDate(int deltaDays) {
+    final current = DateTime.parse(_selectedDate);
+    final next = current.add(Duration(days: deltaDays));
+    final today = DateTime.parse(_todayDate);
+    if (next.isAfter(today)) return;
+    setState(() {
+      _selectedDate = next.toIso8601String().split('T').first;
+    });
+    _loadFromDatabase();
+  }
+
+  Future<void> _pickSelectedDate() async {
+    final current = DateTime.parse(_selectedDate);
+    final today = DateTime.parse(_todayDate);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime(2023),
+      lastDate: today,
+    );
+    if (picked == null) return;
+    setState(() {
+      _selectedDate = picked.toIso8601String().split('T').first;
+    });
+    _loadFromDatabase();
+  }
+
+  String _formatSelectedDateTitle() {
+    if (_isViewingToday) return 'Oggi';
+    final d = DateTime.parse(_selectedDate);
+    final yesterday = DateTime.parse(_todayDate).subtract(const Duration(days: 1));
+    if (d.year == yesterday.year &&
+        d.month == yesterday.month &&
+        d.day == yesterday.day) {
+      return 'Ieri';
+    }
+    const months = [
+      'Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu',
+      'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic',
+    ];
+    return '${d.day} ${months[d.month - 1]}';
   }
 
   Future<void> _deleteMeal(MealEntry meal) async {
@@ -173,7 +220,7 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
       context: context,
       isScrollControlled: true,
       builder: (_) => AddMealBottomSheet(
-        selectedDate: _todayDate,
+        selectedDate: _selectedDate,
         profile: _profile,
         existingMeal: existingMeal,
         onOpenMenuAdvisor: _openMenuAdvisor,
@@ -219,7 +266,7 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
           final per100Multiplier = 100.0 / dish.estimatedGrams;
           final entry = MealEntry(
             id: mealId,
-            date: _todayDate,
+            date: _selectedDate,
             loggedAt: timeStr,
             title: dish.dishName,
             notes: dish.reasoning,
@@ -293,15 +340,62 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: Text(
-          switch (_selectedIndex) {
-            0 => 'Oggi',
-            1 => 'Statistiche',
-            2 => 'Dispensa',
-            _ => 'Profilo',
-          },
-          style: tt.headlineSmall,
-        ),
+        title: _selectedIndex == 0
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    tooltip: 'Giorno precedente',
+                    onPressed: () => _shiftSelectedDate(-1),
+                    icon: const Icon(Symbols.chevron_left_rounded, size: 22),
+                  ),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: _pickSelectedDate,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 4,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _formatSelectedDateTitle(),
+                            style: tt.headlineSmall,
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Symbols.calendar_today_rounded,
+                            size: 16,
+                            color: cs.primary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    tooltip: 'Giorno successivo',
+                    onPressed:
+                        _isViewingToday ? null : () => _shiftSelectedDate(1),
+                    icon: const Icon(Symbols.chevron_right_rounded, size: 22),
+                  ),
+                ],
+              )
+            : Text(
+                switch (_selectedIndex) {
+                  1 => 'Statistiche',
+                  2 => 'Dispensa',
+                  _ => 'Profilo',
+                },
+                style: tt.headlineSmall,
+              ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
@@ -364,7 +458,7 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
             onOpenMenuAdvisor: _openMenuAdvisor,
             onOpenDailySummary: () => DailyAiSummarySheet.show(
               context,
-              date: _todayDate,
+              date: _selectedDate,
               profile: _profile,
               meals: _meals,
               metrics: _metrics,
@@ -372,7 +466,11 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
             onDeleteMeal: _deleteMeal,
             onEditMeal: (meal) => _openMealSheet(existingMeal: meal),
           ),
-          StatsScreen(key: ValueKey(_dataVersion), profile: _profile),
+          StatsScreen(
+            key: ValueKey(_dataVersion),
+            profile: _profile,
+            onDataChanged: _loadFromDatabase,
+          ),
           PantryScreen(
             onQuickAddMeal: (entry) {
               setState(() {

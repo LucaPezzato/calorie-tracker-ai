@@ -137,14 +137,12 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
       return;
     }
 
-    final apiKey = await _keysService.getApiKey(
-      widget.profile.preferredAiProvider,
-    );
-    if (apiKey == null || apiKey.isEmpty) {
+    final creds = await _keysService.resolveActiveCredentials(widget.profile);
+    if (creds == null) {
       if (!mounted) return;
       setState(() {
         _errorMessage =
-            'API Key ${widget.profile.preferredAiProvider == AiProviderType.gemini ? 'Gemini' : 'OpenAI'} mancante! Inseriscila nella tab Profilo.';
+            'Nessuna API Key configurata (né Gemini né OpenAI). Inseriscila nella tab Profilo!';
       });
       return;
     }
@@ -155,9 +153,9 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
     });
     try {
       final result = await _aiService.analyzeMeal(
-        provider: widget.profile.preferredAiProvider,
-        modelName: widget.profile.preferredAiModel,
-        apiKey: apiKey,
+        provider: creds.provider,
+        modelName: creds.modelName,
+        apiKey: creds.apiKey,
         mealId: _mealId,
         userPrompt: _promptCtrl.text,
         imageBytes: _selectedImageBytes,
@@ -190,10 +188,8 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
     final text = _refineCtrl.text.trim();
     if (text.isEmpty) return;
 
-    final apiKey = await _keysService.getApiKey(
-      widget.profile.preferredAiProvider,
-    );
-    if (apiKey == null || apiKey.isEmpty) {
+    final creds = await _keysService.resolveActiveCredentials(widget.profile);
+    if (creds == null) {
       if (!mounted) return;
       setState(() {
         _errorMessage =
@@ -208,9 +204,9 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
     });
     try {
       final result = await _aiService.refineMealWithAi(
-        provider: widget.profile.preferredAiProvider,
-        modelName: widget.profile.preferredAiModel,
-        apiKey: apiKey,
+        provider: creds.provider,
+        modelName: creds.modelName,
+        apiKey: creds.apiKey,
         mealId: _mealId,
         currentResult: AiMealAnalysisResult(
           mealTitle: _mealTitle,

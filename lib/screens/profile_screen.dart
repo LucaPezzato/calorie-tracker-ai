@@ -59,6 +59,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _checkDriveBackupMetadata();
   }
 
+  @override
+  void didUpdateWidget(covariant ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.profile.preferredAiProvider !=
+        widget.profile.preferredAiProvider) {
+      _provider = widget.profile.preferredAiProvider;
+      _loadStoredKey();
+    }
+    if (oldWidget.profile.goalType != widget.profile.goalType) {
+      _goalType = widget.profile.goalType;
+    }
+    if (oldWidget.profile.autoBackupEnabled !=
+        widget.profile.autoBackupEnabled) {
+      _autoBackup = widget.profile.autoBackupEnabled;
+    }
+    if (oldWidget.profile.isManualOverride != widget.profile.isManualOverride) {
+      _manualOverride = widget.profile.isManualOverride;
+    }
+  }
+
   Future<void> _checkDriveBackupMetadata() async {
     if (widget.firebaseService.currentUser != null) {
       final fbDate = await widget.firebaseService.getLatestBackupDate();
@@ -426,6 +446,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             FilledButton(
               onPressed: () async {
                 await _keysService.saveApiKey(_provider, ctrl.text);
+                widget.onProfileChanged(
+                  widget.profile.copyWith(
+                    preferredAiProvider: _provider,
+                    preferredAiModel: _provider == AiProviderType.gemini
+                        ? 'gemini-2.5-flash'
+                        : 'gpt-4o-mini',
+                  ),
+                );
                 await _loadStoredKey();
                 if (ctx.mounted) Navigator.pop(ctx);
                 await _testAiConnection();
