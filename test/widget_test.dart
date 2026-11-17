@@ -7,6 +7,10 @@ void main() {
     await tester.pumpWidget(
       const ProviderScope(child: CalorieTrackerAiApp()),
     );
+    expect(find.text('Calorie Tracker'), findsOneWidget);
+    // Advance past SplashScreen's 1600ms navigation timer
+    await tester.pump(const Duration(milliseconds: 1700));
+    await tester.pump(const Duration(milliseconds: 450));
     expect(find.text('Oggi'), findsWidgets);
   });
 }

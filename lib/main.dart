@@ -503,34 +503,34 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
                 style: tt.headlineSmall,
               ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: cs.outlineVariant.withValues(alpha: 0.3),
-                ),
+          if (_selectedIndex == 0 && !_isViewingToday)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: TextButton.icon(
+                onPressed: () {
+                  setState(() => _selectedDate = _todayDate);
+                  _loadFromDatabase();
+                },
+                icon: const Icon(Symbols.today_rounded, size: 16),
+                label: const Text('Oggi'),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Symbols.cloud_done_rounded,
-                    size: 14,
-                    color: nutrients.fiber,
+            ),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: IconButton(
+              tooltip: 'Dati sincronizzati in locale',
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Dati salvati in locale e pronti per il backup.'),
+                    duration: Duration(seconds: 2),
                   ),
-                  const SizedBox(width: 5),
-                  Text(
-                    'Sincronizzato',
-                    style: tt.labelSmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
+                );
+              },
+              icon: Icon(
+                Symbols.cloud_done_rounded,
+                size: 20,
+                color: nutrients.fiber,
               ),
             ),
           ),
@@ -607,10 +607,30 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
       // Scaffold positions endFloat 16dp above NavigationBar automatically
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton.extended(
-              onPressed: () => _openMealSheet(),
-              icon: const Icon(Symbols.add_rounded),
-              label: const Text('Aggiungi pasto'),
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'fab_quick_camera',
+                  tooltip: 'Scatta foto pasto',
+                  backgroundColor: cs.secondaryContainer,
+                  foregroundColor: cs.onSecondaryContainer,
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  onPressed: () => _openMealSheet(initialMode: 1),
+                  child: const Icon(Symbols.photo_camera_rounded),
+                ),
+                const SizedBox(height: 10),
+                FloatingActionButton.extended(
+                  heroTag: 'fab_add_meal',
+                  onPressed: () => _openMealSheet(),
+                  icon: const Icon(Symbols.add_rounded),
+                  label: const Text('Aggiungi pasto'),
+                ),
+              ],
             )
           : null,
       bottomNavigationBar: NavigationBar(

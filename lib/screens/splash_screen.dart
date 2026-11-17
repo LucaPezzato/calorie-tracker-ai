@@ -57,7 +57,7 @@ class _SplashScreenState extends State<SplashScreen>
     final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1512),
+      backgroundColor: cs.surfaceDim,
       body: Center(
         child: FadeTransition(
           opacity: _fadeAnim,
@@ -66,17 +66,13 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Minimal App Emblem
+                // Expressive App Emblem (tonal elevation, dynamic color aware)
                 Container(
                   width: 120,
                   height: 120,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFF17221D),
-                    border: Border.all(
-                      color: cs.outlineVariant.withValues(alpha: 0.35),
-                      width: 1.5,
-                    ),
+                    color: cs.surfaceContainerLow,
                   ),
                   child: Stack(
                     alignment: Alignment.center,
@@ -86,9 +82,9 @@ class _SplashScreenState extends State<SplashScreen>
                         height: 96,
                         child: CircularProgressIndicator(
                           value: 0.75,
-                          strokeWidth: 6,
+                          strokeWidth: 7,
                           strokeCap: StrokeCap.round,
-                          backgroundColor: const Color(0xFF22332B),
+                          backgroundColor: cs.surfaceContainerHigh,
                           color: cs.primary,
                         ),
                       ),
@@ -105,8 +101,8 @@ class _SplashScreenState extends State<SplashScreen>
                 Text(
                   'Calorie Tracker',
                   style: tt.headlineSmall?.copyWith(
-                    fontSize: 24,
-                    color: const Color(0xFFE4F2EB),
+                    fontSize: 26,
+                    color: cs.onSurface,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -116,7 +112,7 @@ class _SplashScreenState extends State<SplashScreen>
                     vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF17221D),
+                    color: cs.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
                       color: cs.outlineVariant.withValues(alpha: 0.25),

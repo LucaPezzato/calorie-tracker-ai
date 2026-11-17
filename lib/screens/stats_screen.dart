@@ -939,7 +939,6 @@ class _StatsScreenState extends State<StatsScreen> {
                     decoration: BoxDecoration(
                       color: cs.surfaceDim,
                       borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                      border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.25)),
                     ),
                     child: Row(
                       children: [
@@ -967,7 +966,6 @@ class _StatsScreenState extends State<StatsScreen> {
                     decoration: BoxDecoration(
                       color: cs.surfaceDim,
                       borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                      border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.25)),
                     ),
                     child: Row(
                       children: [

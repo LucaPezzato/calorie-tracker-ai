@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../models/nutrition_models.dart';
 import '../theme/app_theme.dart';
+import '../theme/expressive_motion.dart';
 import '../theme/nutrient_colors.dart';
 
 class TodayScreen extends StatelessWidget {
@@ -53,75 +54,80 @@ class TodayScreen extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final nutrients = context.nutrients;
-    final remainingKcal = (profile.targetKcal - _consumedKcal).clamp(
-      0,
-      profile.targetKcal,
-    );
+    final rawDiff = profile.targetKcal - _consumedKcal;
+    final isOverBudget = rawDiff < 0;
+    final displayKcal = isOverBudget ? rawDiff.abs() : rawDiff;
+    final kcalProgress = profile.targetKcal > 0
+        ? (_consumedKcal / profile.targetKcal).clamp(0.0, 1.0)
+        : 0.0;
 
     return ListView(
-      // 96dp bottom padding ensures the Extended FAB never covers the last meal card
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+      // 144dp bottom padding ensures the dual FAB never covers the last card
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 144),
       children: [
-        // 1. HERO CARD (Calorie Ring + 4 Nutrient Progress Bars)
+        // 1. HERO CARD (Expressive Calorie Ring + 4 Nutrient Progress Bars)
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: cs.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(AppTheme.radiusHero),
-            border: Border.all(
-              color: cs.outlineVariant.withValues(alpha: 0.25),
-            ),
           ),
           child: Row(
             children: [
-              // Expressive Kcal Gauge
+              // Expressive Animated Kcal Gauge
               SizedBox(
-                width: 108,
-                height: 108,
+                width: 120,
+                height: 120,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     SizedBox(
-                      width: 100,
-                      height: 100,
-                      child: CircularProgressIndicator(
-                        value: (_consumedKcal / profile.targetKcal).clamp(
-                          0.0,
-                          1.0,
-                        ),
-                        strokeWidth: 9,
-                        strokeCap: StrokeCap.round,
-                        backgroundColor: cs.surfaceDim,
-                        color: cs.primary,
+                      width: 112,
+                      height: 112,
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween<double>(begin: 0, end: kcalProgress),
+                        duration: ExpressiveMotion.spatialDefaultDuration,
+                        curve: ExpressiveMotion.spatialDefault,
+                        builder: (context, animatedValue, _) {
+                          return CircularProgressIndicator(
+                            value: animatedValue,
+                            strokeWidth: 10,
+                            strokeCap: StrokeCap.round,
+                            backgroundColor: cs.surfaceDim,
+                            color: isOverBudget ? cs.error : cs.primary,
+                          );
+                        },
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(14),
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              '$remainingKcal',
-                              style: tt.headlineSmall?.copyWith(
-                                fontSize: 24,
-                                fontFeatures: const [FontFeature.tabularFigures()],
+                              isOverBudget ? '+$displayKcal' : '$displayKcal',
+                              style: tt.displayMedium?.copyWith(
+                                fontSize: 30,
+                                color: isOverBudget ? cs.error : cs.onSurface,
                               ),
                             ),
                             Text(
-                              'Rimanenti',
+                              isOverBudget ? 'Oltre target' : 'Rimanenti',
                               style: tt.labelSmall?.copyWith(
-                                fontSize: 9.5,
-                                color: cs.onSurfaceVariant,
+                                fontSize: 10,
+                                color: isOverBudget
+                                    ? cs.error
+                                    : cs.onSurfaceVariant,
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               '$_consumedKcal / ${profile.targetKcal}',
                               style: tt.labelSmall?.copyWith(
-                                color: cs.primary,
-                                fontFeatures: const [FontFeature.tabularFigures()],
+                                color: isOverBudget ? cs.error : cs.primary,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
@@ -131,7 +137,7 @@ class TodayScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 18),
 
               // 4 Semantic Bars: Proteine, Carboidrati, Grassi, Fibre
               Expanded(
@@ -143,21 +149,21 @@ class TodayScreen extends StatelessWidget {
                       target: profile.targetProteinG,
                       color: nutrients.protein,
                     ),
-                    const SizedBox(height: 9),
+                    const SizedBox(height: 10),
                     _NutrientBarRow(
                       label: 'Carbo',
                       current: _consumedC,
                       target: profile.targetCarbsG,
                       color: nutrients.carbs,
                     ),
-                    const SizedBox(height: 9),
+                    const SizedBox(height: 10),
                     _NutrientBarRow(
                       label: 'Grassi',
                       current: _consumedG,
                       target: profile.targetFatG,
                       color: nutrients.fat,
                     ),
-                    const SizedBox(height: 9),
+                    const SizedBox(height: 10),
                     _NutrientBarRow(
                       label: 'Fibre',
                       current: _consumedF,
@@ -172,7 +178,67 @@ class TodayScreen extends StatelessWidget {
         ),
         const SizedBox(height: 12),
 
-        // 2. TWO HYDRATION & STIMULANT MINI-CARDS: WATER & COFFEE
+        // 2. RECOVERY MODE BANNER (after >= 2 pause days, shown right below Hero)
+        if (daysSinceLastMeal != null &&
+            daysSinceLastMeal! >= 2 &&
+            meals.isEmpty) ...[
+          Card(
+            color: cs.secondaryContainer.withValues(alpha: 0.7),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Symbols.waving_hand_rounded,
+                        color: cs.onSecondaryContainer,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Bentornato! Nessun problema per i giorni di pausa',
+                          style: tt.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: cs.onSecondaryContainer,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'La costanza non significa perfezione. Riparti da oggi con un pasto o una stima rapida.',
+                    style: tt.bodySmall?.copyWith(
+                      color: cs.onSecondaryContainer.withValues(alpha: 0.85),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      FilledButton.tonal(
+                        onPressed: onDismissRecovery,
+                        child: const Text('Riparti da oggi'),
+                      ),
+                      const SizedBox(width: 8),
+                      if (onOpenQuickAdd != null)
+                        OutlinedButton.icon(
+                          onPressed: onOpenQuickAdd,
+                          icon: const Icon(Symbols.bolt_rounded, size: 16),
+                          label: const Text('Stima rapida'),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // 3. HYDRATION & STIMULANT MINI-CARDS: WATER & COFFEE
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -221,12 +287,20 @@ class TodayScreen extends StatelessWidget {
                       const SizedBox(height: 8),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          minHeight: 6,
-                          value: (metrics.waterMl / profile.targetWaterMl)
-                              .clamp(0.0, 1.0),
-                          backgroundColor: cs.surfaceDim,
-                          color: nutrients.water,
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween<double>(
+                            begin: 0,
+                            end: (metrics.waterMl / profile.targetWaterMl)
+                                .clamp(0.0, 1.0),
+                          ),
+                          duration: ExpressiveMotion.spatialDefaultDuration,
+                          curve: ExpressiveMotion.spatialDefault,
+                          builder: (context, val, _) => LinearProgressIndicator(
+                            minHeight: 6,
+                            value: val,
+                            backgroundColor: cs.surfaceDim,
+                            color: nutrients.water,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -311,13 +385,21 @@ class TodayScreen extends StatelessWidget {
                       const SizedBox(height: 8),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          minHeight: 6,
-                          value: (metrics.caffeineMg / 400.0).clamp(0.0, 1.0),
-                          backgroundColor: cs.surfaceDim,
-                          color: metrics.caffeineMg > 350
-                              ? cs.error
-                              : const Color(0xFFD97706),
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween<double>(
+                            begin: 0,
+                            end: (metrics.caffeineMg / 400.0).clamp(0.0, 1.0),
+                          ),
+                          duration: ExpressiveMotion.spatialDefaultDuration,
+                          curve: ExpressiveMotion.spatialDefault,
+                          builder: (context, val, _) => LinearProgressIndicator(
+                            minHeight: 6,
+                            value: val,
+                            backgroundColor: cs.surfaceDim,
+                            color: metrics.caffeineMg > 350
+                                ? cs.error
+                                : const Color(0xFFD97706),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -355,320 +437,19 @@ class TodayScreen extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 14),
 
-        // 3. WEIGHT & RESTAURANT MENU ADVISOR ROW
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Weight Mini-Card
-            Expanded(
-              child: Card(
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: onTapWeight,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Symbols.monitor_weight_rounded,
-                              size: 16,
-                              color: cs.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 5),
-                            Expanded(
-                              child: Text(
-                                'Peso',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: tt.titleMedium?.copyWith(fontSize: 13.5),
-                              ),
-                            ),
-                            Builder(
-                              builder: (context) {
-                                final current = metrics.weightKg ?? profile.currentWeightKg;
-                                final base = previousWeightKg ?? profile.currentWeightKg;
-                                final delta = current - base;
-                                final isLoss = delta < -0.01;
-                                final isGain = delta > 0.01;
-                                final deltaColor = isLoss
-                                    ? nutrients.fiber
-                                    : (isGain ? Colors.orangeAccent : cs.onSurfaceVariant);
-                                final deltaText = delta.abs() < 0.01
-                                    ? '0,0 kg'
-                                    : '${delta > 0 ? '+' : ''}${delta.toStringAsFixed(1).replaceAll('.', ',')} kg';
-
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: cs.surfaceDim,
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(
-                                      color: cs.outlineVariant.withValues(alpha: 0.25),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    deltaText,
-                                    style: tt.labelSmall?.copyWith(
-                                      fontSize: 9.5,
-                                      color: deltaColor,
-                                      fontFeatures: const [
-                                        FontFeature.tabularFigures(),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            '${(metrics.weightKg ?? profile.currentWeightKg).toStringAsFixed(1)} kg',
-                            style: tt.headlineSmall?.copyWith(
-                              fontSize: 18,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Tocca per aggiornare',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: tt.bodyMedium?.copyWith(
-                            fontSize: 11,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-
-            // Menu Advisor Action Card
-            Expanded(
-              child: Card(
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: onOpenMenuAdvisor,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Symbols.restaurant_menu_rounded,
-                              size: 16,
-                              color: cs.primary,
-                            ),
-                            const SizedBox(width: 5),
-                            Expanded(
-                              child: Text(
-                                'Menu',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: tt.titleMedium?.copyWith(fontSize: 13.5),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: cs.primaryContainer,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                'Consiglia',
-                                style: tt.labelSmall?.copyWith(
-                                  fontSize: 9.5,
-                                  color: cs.primary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Trova piatti adatti',
-                            style: tt.headlineSmall?.copyWith(
-                              fontSize: 18,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Da link, foto o testo',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: tt.bodyMedium?.copyWith(
-                            fontSize: 11,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-
-        // 2B. END-OF-DAY AI SUMMARY BANNER
-        Card(
-          clipBehavior: Clip.antiAlias,
-          color: cs.primaryContainer.withValues(alpha: 0.45),
-          child: InkWell(
-            onTap: onOpenDailySummary,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.16),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Symbols.auto_awesome_rounded,
-                      size: 18,
-                      color: cs.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Resoconto AI di fine giornata',
-                          style: tt.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Valutazione macro, idratazione e consiglio per domani',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: tt.labelSmall?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    Symbols.chevron_right_rounded,
-                    color: cs.primary,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // 2C. RECOVERY MODE BANNER (after >= 2 pause days)
-        if (daysSinceLastMeal != null &&
-            daysSinceLastMeal! >= 2 &&
-            meals.isEmpty) ...[
-          Card(
-            color: cs.secondaryContainer.withValues(alpha: 0.6),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Symbols.waving_hand_rounded,
-                        color: cs.onSecondaryContainer,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Bentornato! Nessun problema per i giorni di pausa',
-                          style: tt.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: cs.onSecondaryContainer,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'La costanza non significa perfezione. Riparti da oggi con un pasto o una stima rapida.',
-                    style: tt.bodySmall?.copyWith(
-                      color: cs.onSecondaryContainer.withValues(alpha: 0.85),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      FilledButton.tonal(
-                        onPressed: onDismissRecovery,
-                        child: const Text('Riparti da oggi'),
-                      ),
-                      const SizedBox(width: 8),
-                      if (onOpenQuickAdd != null)
-                        OutlinedButton.icon(
-                          onPressed: onOpenQuickAdd,
-                          icon: const Icon(Symbols.bolt_rounded, size: 16),
-                          label: const Text('Stima rapida'),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-
-        // 2D. 1-TAP QUICK REPEAT CHIPS ("Copia da ieri / Frequenti")
+        // 4. 1-TAP QUICK REPEAT CHIPS ("Copia da ieri / Frequenti")
         if (quickRepeatMeals.isNotEmpty && onQuickRepeatMeal != null) ...[
           Text(
             'Ripeti in 1 tap',
             style: tt.labelMedium?.copyWith(
               color: cs.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 6),
           SizedBox(
-            height: 38,
+            height: 40,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: quickRepeatMeals.length,
@@ -690,7 +471,7 @@ class TodayScreen extends StatelessWidget {
           const SizedBox(height: 14),
         ],
 
-        // 3. CHRONOLOGICAL TIMELINE SECTION
+        // 5. CHRONOLOGICAL TIMELINE SECTION (Primary task above secondary tools)
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -702,13 +483,14 @@ class TodayScreen extends StatelessWidget {
                 style: tt.titleLarge,
               ),
             ),
-            Text(
-              'Scorri per eliminare',
-              style: tt.bodyMedium?.copyWith(
-                fontSize: 11,
-                color: cs.onSurfaceVariant,
+            if (meals.isNotEmpty)
+              Text(
+                'Scorri per eliminare',
+                style: tt.bodyMedium?.copyWith(
+                  fontSize: 11.5,
+                  color: cs.onSurfaceVariant,
+                ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -716,24 +498,33 @@ class TodayScreen extends StatelessWidget {
         if (meals.isEmpty)
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
               child: Column(
                 children: [
-                  Icon(
-                    Symbols.restaurant_rounded,
-                    size: 32,
-                    color: cs.onSurfaceVariant,
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: cs.primaryContainer,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Symbols.restaurant_rounded,
+                      size: 24,
+                      color: cs.onPrimaryContainer,
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Text(
                     'Nessun pasto registrato oggi',
-                    style: tt.titleMedium?.copyWith(color: cs.onSurfaceVariant),
+                    style: tt.titleMedium,
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Premi "+ Aggiungi pasto" in basso per iniziare',
+                    'Usa "+ Aggiungi pasto" o la fotocamera qui sotto per iniziare.',
+                    textAlign: TextAlign.center,
                     style: tt.bodyMedium?.copyWith(
-                      fontSize: 12,
+                      fontSize: 12.5,
                       color: cs.onSurfaceVariant,
                     ),
                   ),
@@ -830,15 +621,12 @@ class TodayScreen extends StatelessWidget {
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2.5,
+                                horizontal: 9,
+                                vertical: 3,
                               ),
                               decoration: BoxDecoration(
-                                color: cs.surfaceDim,
+                                color: cs.surfaceContainerHigh,
                                 borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: cs.outlineVariant.withValues(alpha: 0.25),
-                                ),
                               ),
                               child: Text(
                                 meal.loggedAt,
@@ -852,8 +640,8 @@ class TodayScreen extends StatelessWidget {
                             ),
                             Text(
                               '${meal.totalKcal} kcal',
-                              style: tt.labelMedium?.copyWith(
-                                fontSize: 13,
+                              style: tt.titleMedium?.copyWith(
+                                fontSize: 14,
                                 color: cs.primary,
                                 fontFeatures: const [
                                   FontFeature.tabularFigures(),
@@ -870,7 +658,7 @@ class TodayScreen extends StatelessWidget {
                               .map((i) => '${i.name} (${i.grams.round()}g)')
                               .join(' • '),
                           style: tt.bodyMedium?.copyWith(
-                            fontSize: 12,
+                            fontSize: 12.5,
                             color: cs.onSurfaceVariant,
                           ),
                         ),
@@ -925,6 +713,255 @@ class TodayScreen extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(height: 10),
+
+        // 6. SECONDARY TOOLS & INSIGHTS (Weight, Menu Advisor, End-of-day AI Summary)
+        Text(
+          'Strumenti & Riepilogo',
+          style: tt.labelMedium?.copyWith(
+            color: cs.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Weight Mini-Card
+            Expanded(
+              child: Card(
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: onTapWeight,
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Symbols.monitor_weight_rounded,
+                              size: 16,
+                              color: cs.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 5),
+                            Expanded(
+                              child: Text(
+                                'Peso',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: tt.titleMedium?.copyWith(fontSize: 13.5),
+                              ),
+                            ),
+                            Builder(
+                              builder: (context) {
+                                final current =
+                                    metrics.weightKg ?? profile.currentWeightKg;
+                                final base =
+                                    previousWeightKg ?? profile.currentWeightKg;
+                                final delta = current - base;
+                                final isLoss = delta < -0.01;
+                                final isGain = delta > 0.01;
+                                final deltaColor = isLoss
+                                    ? nutrients.fiber
+                                    : (isGain
+                                        ? Colors.orangeAccent
+                                        : cs.onSurfaceVariant);
+                                final deltaText = delta.abs() < 0.01
+                                    ? '0,0 kg'
+                                    : '${delta > 0 ? '+' : ''}${delta.toStringAsFixed(1).replaceAll('.', ',')} kg';
+
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: cs.surfaceContainerHigh,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    deltaText,
+                                    style: tt.labelSmall?.copyWith(
+                                      fontSize: 9.5,
+                                      color: deltaColor,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '${(metrics.weightKg ?? profile.currentWeightKg).toStringAsFixed(1)} kg',
+                            style: tt.headlineSmall?.copyWith(
+                              fontSize: 20,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Tocca per aggiornare',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.bodyMedium?.copyWith(
+                            fontSize: 11.5,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+
+            // Menu Advisor Action Card
+            Expanded(
+              child: Card(
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: onOpenMenuAdvisor,
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Symbols.restaurant_menu_rounded,
+                              size: 16,
+                              color: cs.primary,
+                            ),
+                            const SizedBox(width: 5),
+                            Expanded(
+                              child: Text(
+                                'Menu',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: tt.titleMedium?.copyWith(fontSize: 13.5),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: cs.primaryContainer,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                'AI',
+                                style: tt.labelSmall?.copyWith(
+                                  fontSize: 9.5,
+                                  color: cs.onPrimaryContainer,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Trova piatti',
+                            style: tt.headlineSmall?.copyWith(
+                              fontSize: 20,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Da link, foto o testo',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.bodyMedium?.copyWith(
+                            fontSize: 11.5,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // END-OF-DAY AI SUMMARY BANNER
+        Card(
+          clipBehavior: Clip.antiAlias,
+          color: cs.primaryContainer.withValues(alpha: 0.45),
+          child: InkWell(
+            onTap: onOpenDailySummary,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.16),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Symbols.auto_awesome_rounded,
+                      size: 20,
+                      color: cs.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Resoconto AI di fine giornata',
+                          style: tt.titleMedium?.copyWith(
+                            fontSize: 14.5,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Valutazione macro, idratazione e consiglio per domani',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tt.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Symbols.chevron_right_rounded,
+                    color: cs.primary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -944,28 +981,32 @@ class _WaterQuickButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    return Material(
-      color: color.withValues(alpha: 0.12),
-      shape: StadiumBorder(
-        side: BorderSide(color: color.withValues(alpha: 0.28)),
-      ),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-          child: Center(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                label,
-                maxLines: 1,
-                style: tt.labelSmall?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: const [
-                    FontFeature.tabularFigures(),
-                  ],
+    return ExpressiveTapScale(
+      onTap: onTap,
+      child: Material(
+        color: color.withValues(alpha: 0.14),
+        shape: const StadiumBorder(),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 38),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: tt.labelSmall?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: const [
+                        FontFeature.tabularFigures(),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -993,6 +1034,7 @@ class _NutrientBarRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
+    final progress = target > 0 ? (current / target).clamp(0.0, 1.0) : 0.0;
     return Column(
       children: [
         Row(
@@ -1002,7 +1044,7 @@ class _NutrientBarRow extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: tt.labelMedium?.copyWith(fontSize: 11, color: color),
+                style: tt.labelMedium?.copyWith(fontSize: 11.5, color: color),
               ),
             ),
             const SizedBox(width: 4),
@@ -1020,11 +1062,16 @@ class _NutrientBarRow extends StatelessWidget {
         const SizedBox(height: 4),
         ClipRRect(
           borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            minHeight: 6,
-            value: (current / target).clamp(0.0, 1.0),
-            backgroundColor: cs.surfaceDim,
-            color: color,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: progress),
+            duration: ExpressiveMotion.spatialDefaultDuration,
+            curve: ExpressiveMotion.spatialDefault,
+            builder: (context, val, _) => LinearProgressIndicator(
+              minHeight: 6,
+              value: val,
+              backgroundColor: cs.surfaceDim,
+              color: color,
+            ),
           ),
         ),
       ],

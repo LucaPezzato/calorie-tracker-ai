@@ -125,9 +125,7 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
 
   Future<void> _onModeChanged(int mode) async {
     setState(() => _selectedMode = mode);
-    if (mode == 1) {
-      await _pickPhoto(ImageSource.gallery);
-    } else if (mode == 2) {
+    if (mode == 2) {
       // Barcode mode: open live camera / EAN dialog
       final scannedItem = await showDialog<MealItem>(
         context: context,
@@ -404,6 +402,29 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
                 ),
               ),
               const SizedBox(height: 10),
+            ],
+
+            if (_selectedMode == 1 && _selectedImageBytes == null) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      onPressed: () => _pickPhoto(ImageSource.camera),
+                      icon: const Icon(Symbols.photo_camera_rounded, size: 18),
+                      label: const Text('Scatta foto'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      onPressed: () => _pickPhoto(ImageSource.gallery),
+                      icon: const Icon(Symbols.photo_library_rounded, size: 18),
+                      label: const Text('Galleria'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
             ],
 
             if (_selectedImageBytes != null) ...[
@@ -712,7 +733,10 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
                                   IconButton(
                                     visualDensity: VisualDensity.compact,
                                     padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: cs.surfaceContainerHigh,
+                                    ),
                                     icon: const Text('½', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                     tooltip: 'Dimezza porzione (mezza porzione)',
                                     onPressed: () {
@@ -723,11 +747,15 @@ class _AddMealBottomSheetState extends State<AddMealBottomSheet> {
                                       });
                                     },
                                   ),
+                                  const SizedBox(width: 4),
                                   // Quick Double Portion Button
                                   IconButton(
                                     visualDensity: VisualDensity.compact,
                                     padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: cs.surfaceContainerHigh,
+                                    ),
                                     icon: const Text('2×', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                     tooltip: 'Raddoppia porzione',
                                     onPressed: () {

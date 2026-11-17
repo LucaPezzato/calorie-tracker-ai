@@ -1329,9 +1329,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     decoration: BoxDecoration(
                       color: cs.surfaceDim,
                       borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                      border: Border.all(
-                        color: cs.outlineVariant.withValues(alpha: 0.25),
-                      ),
                     ),
                     child: Row(
                       children: [
@@ -1829,9 +1826,6 @@ class _TargetTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surfaceDim,
         borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-        border: Border.all(
-          color: cs.outlineVariant.withValues(alpha: 0.25),
-        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

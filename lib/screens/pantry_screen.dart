@@ -83,6 +83,7 @@ class _PantryScreenState extends State<PantryScreen> {
                   contentPadding: const EdgeInsets.symmetric(vertical: 0),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(999),
+                    borderSide: BorderSide.none,
                   ),
                 ),
               ),
@@ -120,6 +121,51 @@ class _PantryScreenState extends State<PantryScreen> {
           ],
         ),
         const SizedBox(height: 16),
+
+        if (filtered.isEmpty)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+              child: Column(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: cs.secondaryContainer,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _searchQuery.isEmpty
+                          ? Symbols.kitchen_rounded
+                          : Symbols.search_off_rounded,
+                      size: 24,
+                      color: cs.onSecondaryContainer,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _searchQuery.isEmpty
+                        ? 'La tua Dispensa è vuota'
+                        : 'Nessun risultato per "$_searchQuery"',
+                    style: tt.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _searchQuery.isEmpty
+                        ? 'Scansiona un barcode o salva i tuoi cibi preferiti dai pasti per aggiungerli in 1 tap.'
+                        : 'Prova con un altro nome o scansiona un nuovo barcode.',
+                    style: tt.bodyMedium?.copyWith(
+                      fontSize: 12.5,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
 
         ...filtered.map((fav) {
           final p = ((fav.defaultGrams / 100.0) * fav.proteinPer100g).round();
