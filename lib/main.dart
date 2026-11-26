@@ -610,8 +610,17 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
       ),
       // Scaffold positions endFloat 16dp above NavigationBar automatically
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: _selectedIndex == 0
-          ? Column(
+      floatingActionButton: IgnorePointer(
+        ignoring: _selectedIndex != 0,
+        child: AnimatedSlide(
+          offset: _selectedIndex == 0 ? Offset.zero : const Offset(0, 0.14),
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          child: AnimatedOpacity(
+            opacity: _selectedIndex == 0 ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 170),
+            curve: Curves.easeOutCubic,
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -635,8 +644,10 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
                   label: const Text('Aggiungi pasto'),
                 ),
               ],
-            )
-          : null,
+            ),
+          ),
+        ),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (idx) => setState(() => _selectedIndex = idx),
