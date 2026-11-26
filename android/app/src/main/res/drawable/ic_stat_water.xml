@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Crisp monochrome water droplet silhouette for Hydration Reminders -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2.69L17.66,8.35C20.78,11.47 20.78,16.53 17.66,19.65C16.1,21.21 14.05,22 12,22C9.95,22 7.9,21.22 6.34,19.66C3.22,16.54 3.22,11.48 6.34,8.36L12,2.69Z" />
+</vector>
