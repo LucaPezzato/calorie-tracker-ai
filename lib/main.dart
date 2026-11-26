@@ -14,6 +14,7 @@ import 'screens/profile_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/stats_screen.dart';
 import 'screens/today_screen.dart';
+import 'services/app_update_service.dart';
 import 'services/drive_backup_service.dart';
 import 'services/firebase_backup_service.dart';
 import 'services/water_reminder_service.dart';
@@ -118,6 +119,11 @@ class _MainShellScreenState extends State<MainShellScreen> with WidgetsBindingOb
       }
     };
     _loadFromDatabase();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AppUpdateService.calorieTracker.checkAndPrompt(context, silent: true);
+      }
+    });
   }
 
   @override

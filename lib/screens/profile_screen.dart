@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../data/local_database.dart';
 import '../models/nutrition_models.dart';
 import '../services/ai_nutrition_service.dart';
+import '../services/app_update_service.dart';
 import '../services/drive_backup_service.dart';
 import '../services/firebase_backup_service.dart';
 import '../services/secure_keys_service.dart';
@@ -1796,6 +1797,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ],
+            const Divider(height: 24),
+            Row(
+              children: [
+                Icon(Symbols.system_update_rounded, color: cs.primary, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Aggiornamenti App (GitHub)',
+                    style: tt.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Controlla nuove release su GitHub e installa l\'APK direttamente dall\'app.',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => AppUpdateService.calorieTracker
+                  .checkAndPrompt(context, silent: false),
+              icon: const Icon(Symbols.refresh_rounded, size: 17),
+              label: const Text('Controlla aggiornamenti'),
+            ),
           ],
         ),
       ),
