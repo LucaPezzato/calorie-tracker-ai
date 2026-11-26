@@ -23,8 +23,12 @@ import 'theme/nutrient_colors.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await WidgetSyncService.initialize();
-  await WaterReminderService.instance.initialize();
+  try {
+    await WidgetSyncService.initialize();
+  } catch (_) {}
+  try {
+    await WaterReminderService.instance.initialize();
+  } catch (_) {}
   runApp(const ProviderScope(child: CalorieTrackerAiApp()));
 }
 

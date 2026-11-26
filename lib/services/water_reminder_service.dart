@@ -38,7 +38,7 @@ class WaterReminderService {
     tz_data.initializeTimeZones();
     _configureLocalTimezone();
 
-    const androidInit = AndroidInitializationSettings('@drawable/ic_stat_calorie');
+    const androidInit = AndroidInitializationSettings('ic_stat_calorie');
     const initSettings = InitializationSettings(android: androidInit);
     await _plugin.initialize(settings: initSettings);
 
@@ -129,7 +129,7 @@ class WaterReminderService {
         channelDescription: _channelDescription,
         importance: Importance.defaultImportance,
         priority: Priority.defaultPriority,
-        icon: '@drawable/ic_stat_water',
+        icon: 'ic_stat_water',
         color: Color(0xFF38BDF8),
       ),
     );
@@ -227,7 +227,7 @@ class WaterReminderService {
         channelDescription: _mealChannelDescription,
         importance: Importance.defaultImportance,
         priority: Priority.defaultPriority,
-        icon: '@drawable/ic_stat_calorie',
+        icon: 'ic_stat_calorie',
         color: Color(0xFF10B981),
       ),
     );
