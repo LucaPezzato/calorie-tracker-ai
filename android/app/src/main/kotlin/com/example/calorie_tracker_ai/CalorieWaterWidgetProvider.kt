@@ -12,6 +12,7 @@ import java.util.Locale
 class CalorieWaterWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        WidgetHelper.ensureCurrentDay(context)
         val prefs = HomeWidgetPlugin.getData(context)
         val numFormat = NumberFormat.getIntegerInstance(Locale.ITALY)
 
@@ -79,6 +80,16 @@ class CalorieWaterWidgetProvider : AppWidgetProvider() {
             action == WidgetHelper.ACTION_COFFEE_ADD
         ) {
             WidgetHelper.handleQuickAction(context, action)
+            return
+        }
+        if (action == WidgetHelper.ACTION_MIDNIGHT_REFRESH ||
+            action == Intent.ACTION_DATE_CHANGED ||
+            action == Intent.ACTION_TIME_CHANGED ||
+            action == Intent.ACTION_TIMEZONE_CHANGED ||
+            action == Intent.ACTION_BOOT_COMPLETED
+        ) {
+            WidgetHelper.ensureCurrentDay(context)
+            WidgetHelper.updateAllWidgets(context)
             return
         }
         super.onReceive(context, intent)

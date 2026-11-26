@@ -12,6 +12,7 @@ import java.util.Locale
 class HydrationCompactWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        WidgetHelper.ensureCurrentDay(context)
         val prefs = HomeWidgetPlugin.getData(context)
         val numFormat = NumberFormat.getIntegerInstance(Locale.ITALY)
 

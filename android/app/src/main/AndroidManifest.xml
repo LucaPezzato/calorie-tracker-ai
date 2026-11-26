@@ -53,6 +53,11 @@
                 <action android:name="com.example.calorie_tracker_ai.ACTION_WATER_ADD" />
                 <action android:name="com.example.calorie_tracker_ai.ACTION_WATER_ADD500" />
                 <action android:name="com.example.calorie_tracker_ai.ACTION_COFFEE_ADD" />
+                <action android:name="com.example.calorie_tracker_ai.ACTION_MIDNIGHT_REFRESH" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -68,6 +73,11 @@
                 <action android:name="com.example.calorie_tracker_ai.ACTION_WATER_ADD" />
                 <action android:name="com.example.calorie_tracker_ai.ACTION_WATER_ADD500" />
                 <action android:name="com.example.calorie_tracker_ai.ACTION_COFFEE_ADD" />
+                <action android:name="com.example.calorie_tracker_ai.ACTION_MIDNIGHT_REFRESH" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

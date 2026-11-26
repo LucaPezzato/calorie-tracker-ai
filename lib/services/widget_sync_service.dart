@@ -45,6 +45,7 @@ class WidgetSyncService {
       final totalF = meals.fold(0.0, (sum, m) => sum + m.totalFatG).round();
       final remainingKcal = max(0, profile.targetKcal - totalKcal);
 
+      await HomeWidget.saveWidgetData<String>('widget_date', metrics.date);
       await HomeWidget.saveWidgetData<int>('kcal_remaining', remainingKcal);
       await HomeWidget.saveWidgetData<int>('kcal_target', profile.targetKcal);
       await HomeWidget.saveWidgetData<int>('protein_g', totalP);
